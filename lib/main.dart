@@ -1,10 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app.dart';
+import 'data/ads.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // No-op unless built with --dart-define=ADS_ENABLED=true on mobile.
+  unawaited(AdsConfig.init());
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

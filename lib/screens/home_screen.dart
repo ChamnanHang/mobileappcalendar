@@ -35,31 +35,32 @@ class _HomeScreenState extends State<HomeScreen> {
         reverseTransitionDuration: const Duration(milliseconds: 240),
         pageBuilder: (_, _, _) =>
             EditorScreen(initial: note, autofocusBody: autofocusBody),
-        transitionsBuilder: (
-          BuildContext context,
-          Animation<double> animation,
-          Animation<double> secondary,
-          Widget child,
-        ) {
-          final Animation<double> curved = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-            reverseCurve: Curves.easeInCubic,
-          );
-          return FadeTransition(
-            opacity: curved,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.04),
-                end: Offset.zero,
-              ).animate(curved),
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.98, end: 1).animate(curved),
-                child: child,
-              ),
-            ),
-          );
-        },
+        transitionsBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondary,
+              Widget child,
+            ) {
+              final Animation<double> curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.04),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 0.98, end: 1).animate(curved),
+                    child: child,
+                  ),
+                ),
+              );
+            },
       ),
     );
   }
@@ -75,10 +76,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final NotesController notes = NotesScope.read(context);
     final EditorAction? action = await showGlassSheet<EditorAction>(
       context: context,
-      builder: (BuildContext context) => NoteOptionsSheet(
-        note: note,
-        accent: AppColors.accentAt(note.accent),
-      ),
+      builder: (BuildContext context) =>
+          NoteOptionsSheet(note: note, accent: AppColors.accentAt(note.accent)),
     );
     if (action == null || !mounted) return;
 
@@ -86,10 +85,8 @@ class _HomeScreenState extends State<HomeScreen> {
       case EditorAction.tags:
         final List<String>? tags = await showGlassSheet<List<String>>(
           context: context,
-          builder: (BuildContext context) => TagEditorSheet(
-            selected: note.tags,
-            suggestions: notes.allTags,
-          ),
+          builder: (BuildContext context) =>
+              TagEditorSheet(selected: note.tags, suggestions: notes.allTags),
         );
         if (tags != null) notes.upsert(note.copyWith(tags: tags));
       case EditorAction.folder:
@@ -155,10 +152,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final int columns = width < 620 ? 2 : (width < 1000 ? 3 : 4);
 
     final bool grouping = notes.query.trim().isEmpty;
-    final List<Note> pinned =
-        grouping ? visible.where((Note n) => n.pinned).toList() : <Note>[];
-    final List<Note> rest =
-        grouping ? visible.where((Note n) => !n.pinned).toList() : visible;
+    final List<Note> pinned = grouping
+        ? visible.where((Note n) => n.pinned).toList()
+        : <Note>[];
+    final List<Note> rest = grouping
+        ? visible.where((Note n) => !n.pinned).toList()
+        : visible;
 
     // The aurora background lives in AppShell so it survives tab switches.
     return Scaffold(
@@ -168,76 +167,74 @@ class _HomeScreenState extends State<HomeScreen> {
         onNewChecklist: () => _create(NoteKind.checklist),
       ),
       body: SafeArea(
-          child: notes.loading
-              ? const Center(
-                  child: SizedBox(
-                    width: 26,
-                    height: 26,
-                    child: CircularProgressIndicator(strokeWidth: 2.2),
+        child: notes.loading
+            ? const Center(
+                child: SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                ),
+              )
+            : CustomScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                slivers: <Widget>[
+                  SliverToBoxAdapter(
+                    child: _Header(count: visible.length, filter: notes.filter),
                   ),
-                )
-              : CustomScrollView(
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  slivers: <Widget>[
-                    SliverToBoxAdapter(
-                      child: _Header(count: visible.length, filter: notes.filter),
-                    ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 6, 18, 0),
-                        child: _SearchField(
-                          controller: _search,
-                          onChanged: notes.search,
-                          onClear: () {
-                            _search.clear();
-                            notes.search('');
-                          },
-                        ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 6, 18, 0),
+                      child: _SearchField(
+                        controller: _search,
+                        onChanged: notes.search,
+                        onClear: () {
+                          _search.clear();
+                          notes.search('');
+                        },
                       ),
                     ),
-                    SliverToBoxAdapter(
-                      child: _FilterBar(notes: notes),
-                    ),
-                    if (notes.allFolders.isNotEmpty)
-                      SliverToBoxAdapter(child: _FolderBar(notes: notes)),
-                    if (notes.allTags.isNotEmpty)
-                      SliverToBoxAdapter(child: _TagBar(notes: notes)),
-                    if (visible.isEmpty)
-                      SliverToBoxAdapter(child: _emptyFor(notes))
-                    else ...<Widget>[
-                      if (pinned.isNotEmpty) ...<Widget>[
-                        const SliverToBoxAdapter(
-                          child: _SectionLabel(
-                            label: 'Pinned',
-                            icon: Icons.push_pin_rounded,
-                          ),
+                  ),
+                  SliverToBoxAdapter(child: _FilterBar(notes: notes)),
+                  if (notes.allFolders.isNotEmpty)
+                    SliverToBoxAdapter(child: _FolderBar(notes: notes)),
+                  if (notes.allTags.isNotEmpty)
+                    SliverToBoxAdapter(child: _TagBar(notes: notes)),
+                  if (visible.isEmpty)
+                    SliverToBoxAdapter(child: _emptyFor(notes))
+                  else ...<Widget>[
+                    if (pinned.isNotEmpty) ...<Widget>[
+                      const SliverToBoxAdapter(
+                        child: _SectionLabel(
+                          label: 'Pinned',
+                          icon: Icons.push_pin_rounded,
                         ),
-                        SliverToBoxAdapter(
-                          child: _MasonryGrid(
-                            notes: pinned,
-                            columns: columns,
-                            buildCard: _card,
-                          ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: _MasonryGrid(
+                          notes: pinned,
+                          columns: columns,
+                          buildCard: _card,
                         ),
-                      ],
-                      if (rest.isNotEmpty) ...<Widget>[
-                        if (pinned.isNotEmpty)
-                          const SliverToBoxAdapter(
-                            child: _SectionLabel(label: 'Notes'),
-                          ),
-                        SliverToBoxAdapter(
-                          child: _MasonryGrid(
-                            notes: rest,
-                            columns: columns,
-                            buildCard: _card,
-                          ),
-                        ),
-                      ],
+                      ),
                     ],
-                    const SliverToBoxAdapter(child: SizedBox(height: 110)),
+                    if (rest.isNotEmpty) ...<Widget>[
+                      if (pinned.isNotEmpty)
+                        const SliverToBoxAdapter(
+                          child: _SectionLabel(label: 'Notes'),
+                        ),
+                      SliverToBoxAdapter(
+                        child: _MasonryGrid(
+                          notes: rest,
+                          columns: columns,
+                          buildCard: _card,
+                        ),
+                      ),
+                    ],
                   ],
-                ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 110)),
+                ],
+              ),
       ),
     );
   }
@@ -255,22 +252,22 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     return switch (notes.filter) {
       NoteFilter.archive => const EmptyState(
-          icon: Icons.archive_outlined,
-          title: 'Archive is empty',
-          message: 'Swipe a note sideways to tuck it away here.',
-          accent: AppColors.blue,
-        ),
+        icon: Icons.archive_outlined,
+        title: 'Archive is empty',
+        message: 'Swipe a note sideways to tuck it away here.',
+        accent: AppColors.blue,
+      ),
       NoteFilter.favorites => const EmptyState(
-          icon: Icons.star_outline_rounded,
-          title: 'No favourites yet',
-          message: 'Tap the star on a note to keep it close.',
-          accent: AppColors.amber,
-        ),
+        icon: Icons.star_outline_rounded,
+        title: 'No favourites yet',
+        message: 'Tap the star on a note to keep it close.',
+        accent: AppColors.amber,
+      ),
       NoteFilter.all => const EmptyState(
-          icon: Icons.edit_note_rounded,
-          title: 'Nothing noted yet',
-          message: 'Tap the + button to write your first note.',
-        ),
+        icon: Icons.edit_note_rounded,
+        title: 'Nothing noted yet',
+        message: 'Tap the + button to write your first note.',
+      ),
     };
   }
 
@@ -343,7 +340,11 @@ class _Header extends StatelessWidget {
                 ),
               ],
             ),
-            child: const Icon(Icons.bolt_rounded, size: 22, color: Colors.white),
+            child: const Icon(
+              Icons.bolt_rounded,
+              size: 22,
+              color: Colors.white,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -411,8 +412,11 @@ class _SearchField extends StatelessWidget {
               if (value.text.isEmpty) return const SizedBox.shrink();
               return GestureDetector(
                 onTap: onClear,
-                child: Icon(Icons.close_rounded,
-                    size: 17, color: AppColors.textMid),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 17,
+                  color: AppColors.textMid,
+                ),
               );
             },
           ),
@@ -519,18 +523,18 @@ class _FilterPill extends StatelessWidget {
             Text(
               label,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: selected ? AppColors.textHigh : AppColors.textMid,
-                    fontSize: 12,
-                  ),
+                color: selected ? AppColors.textHigh : AppColors.textMid,
+                fontSize: 12,
+              ),
             ),
             if (count != null && count! > 0) ...<Widget>[
               const SizedBox(width: 5),
               Text(
                 '$count',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: selected ? accent : AppColors.textLow,
-                      fontSize: 11,
-                    ),
+                  color: selected ? accent : AppColors.textLow,
+                  fontSize: 11,
+                ),
               ),
             ],
           ],
@@ -645,18 +649,18 @@ class _SmallChip extends StatelessWidget {
             Text(
               label,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: selected ? AppColors.textHigh : AppColors.textMid,
-                    fontSize: 12,
-                  ),
+                color: selected ? AppColors.textHigh : AppColors.textMid,
+                fontSize: 12,
+              ),
             ),
             if (trailing != null) ...<Widget>[
               const SizedBox(width: 6),
               Text(
                 trailing!,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.textLow,
-                      fontSize: 11,
-                    ),
+                  color: AppColors.textLow,
+                  fontSize: 11,
+                ),
               ),
             ],
           ],
@@ -685,10 +689,10 @@ class _SectionLabel extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.textLow,
-                  letterSpacing: 1.2,
-                  fontSize: 10.5,
-                ),
+              color: AppColors.textLow,
+              letterSpacing: 1.2,
+              fontSize: 10.5,
+            ),
           ),
         ],
       ),
@@ -711,8 +715,10 @@ class _MasonryGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<List<Note>> buckets =
-        List<List<Note>>.generate(columns, (_) => <Note>[]);
+    final List<List<Note>> buckets = List<List<Note>>.generate(
+      columns,
+      (_) => <Note>[],
+    );
     for (int i = 0; i < notes.length; i++) {
       buckets[i % columns].add(notes[i]);
     }
@@ -856,8 +862,11 @@ class _ExpandingFabState extends State<_ExpandingFab>
               turns: _open ? 0.375 : 0,
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOutBack,
-              child: const Icon(Icons.add_rounded,
-                  size: 30, color: Colors.white),
+              child: const Icon(
+                Icons.add_rounded,
+                size: 30,
+                color: Colors.white,
+              ),
             ),
           ),
         ),
@@ -920,9 +929,9 @@ class _MiniAction extends StatelessWidget {
                 const SizedBox(width: 9),
                 Text(
                   label,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontSize: 13.5,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontSize: 13.5),
                 ),
               ],
             ),

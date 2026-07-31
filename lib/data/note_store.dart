@@ -40,8 +40,9 @@ class PrefsNoteStore implements NoteStore {
   @override
   Future<void> save(List<Note> notes) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
-    final String raw =
-        jsonEncode(notes.map((Note n) => n.toJson()).toList(growable: false));
+    final String raw = jsonEncode(
+      notes.map((Note n) => n.toJson()).toList(growable: false),
+    );
     await prefs.setString(key, raw);
   }
 }

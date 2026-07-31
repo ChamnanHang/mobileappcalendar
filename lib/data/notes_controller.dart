@@ -56,7 +56,9 @@ class NotesController extends ChangeNotifier {
     final List<String> tags = counts.keys.toList()
       ..sort((String a, String b) {
         final int byCount = counts[b]!.compareTo(counts[a]!);
-        return byCount != 0 ? byCount : a.toLowerCase().compareTo(b.toLowerCase());
+        return byCount != 0
+            ? byCount
+            : a.toLowerCase().compareTo(b.toLowerCase());
       });
     return tags;
   }
@@ -69,13 +71,14 @@ class NotesController extends ChangeNotifier {
       if (folder != null && folder.trim().isNotEmpty) folders.add(folder);
     }
     final List<String> list = folders.toList()
-      ..sort((String a, String b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      ..sort(
+        (String a, String b) => a.toLowerCase().compareTo(b.toLowerCase()),
+      );
     return list;
   }
 
-  int notesInFolder(String folder) => _notes
-      .where((Note n) => !n.archived && n.folder == folder)
-      .length;
+  int notesInFolder(String folder) =>
+      _notes.where((Note n) => !n.archived && n.folder == folder).length;
 
   /// Filtered + sorted notes for the current view. Pinned float to the top.
   List<Note> get visibleNotes {
@@ -156,11 +159,8 @@ class NotesController extends ChangeNotifier {
   // ---------------------------------------------------------------- mutation
 
   /// Creates a draft that is only persisted once it has content.
-  Note draft({NoteKind kind = NoteKind.text}) => Note.empty(
-        kind: kind,
-        folder: _activeFolder,
-        accent: _notes.length % 6,
-      );
+  Note draft({NoteKind kind = NoteKind.text}) =>
+      Note.empty(kind: kind, folder: _activeFolder, accent: _notes.length % 6);
 
   /// Inserts or updates a note. Empty notes are dropped instead of saved.
   void upsert(Note note) {
@@ -197,20 +197,14 @@ class NotesController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void togglePin(String id) => _mutate(
-        id,
-        (Note n) => n.copyWith(pinned: !n.pinned),
-      );
+  void togglePin(String id) =>
+      _mutate(id, (Note n) => n.copyWith(pinned: !n.pinned));
 
-  void toggleFavorite(String id) => _mutate(
-        id,
-        (Note n) => n.copyWith(favorite: !n.favorite),
-      );
+  void toggleFavorite(String id) =>
+      _mutate(id, (Note n) => n.copyWith(favorite: !n.favorite));
 
-  void setArchived(String id, bool archived) => _mutate(
-        id,
-        (Note n) => n.copyWith(archived: archived, pinned: false),
-      );
+  void setArchived(String id, bool archived) =>
+      _mutate(id, (Note n) => n.copyWith(archived: archived, pinned: false));
 
   void setAccent(String id, int accent) =>
       _mutate(id, (Note n) => n.copyWith(accent: accent));
@@ -219,14 +213,15 @@ class NotesController extends ChangeNotifier {
       _mutate(id, (Note n) => n.copyWith(folder: folder));
 
   void toggleChecklistItem(String noteId, String itemId) => _mutate(
-        noteId,
-        (Note note) => note.copyWith(
-          items: note.items
-              .map((ChecklistItem i) =>
-                  i.id == itemId ? i.copyWith(done: !i.done) : i)
-              .toList(),
-        ),
-      );
+    noteId,
+    (Note note) => note.copyWith(
+      items: note.items
+          .map(
+            (ChecklistItem i) => i.id == itemId ? i.copyWith(done: !i.done) : i,
+          )
+          .toList(),
+    ),
+  );
 
   void _mutate(String id, Note Function(Note) transform) {
     final int index = _notes.indexWhere((Note n) => n.id == id);
@@ -267,7 +262,8 @@ class NotesController extends ChangeNotifier {
       Note(
         id: newId(),
         title: 'Welcome to Noted',
-        body: 'A calm place for the things you want to keep.\n\n'
+        body:
+            'A calm place for the things you want to keep.\n\n'
             '**Bold**, *italic* and `code` work inline.\n\n'
             '# Big heading\n'
             '## Smaller heading\n\n'
@@ -303,7 +299,8 @@ class NotesController extends ChangeNotifier {
       Note(
         id: newId(),
         title: 'App ideas',
-        body: 'Things worth building next:\n\n'
+        body:
+            'Things worth building next:\n\n'
             '- Offline-first habit tracker\n'
             '- Khmer/English dictionary with handwriting input\n'
             '- A tiny expense splitter for trips',

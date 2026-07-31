@@ -44,10 +44,7 @@ const Map<String, KhmerHoliday> _fixedHolidays = <String, KhmerHoliday>{
     'ព្រះរាជពិធីបុណ្យចម្រើនព្រះជន្ម ព្រះមហាក្សត្រ',
     "King Sihamoni's Birthday",
   ),
-  '06-18': KhmerHoliday(
-    'ទិវាកំណើតសម្តេចម្តាយ',
-    "King's Mother's Birthday",
-  ),
+  '06-18': KhmerHoliday('ទិវាកំណើតសម្តេចម្តាយ', "King's Mother's Birthday"),
   '09-24': KhmerHoliday('ទិវារដ្ឋធម្មនុញ្ញ', 'Constitution Day'),
   '10-15': KhmerHoliday(
     'ទិវាប្រារព្ធពិធីគោរពព្រះវិញ្ញាណក្ខន្ធ ព្រះបរមរតនកោដ្ឋ',
@@ -101,11 +98,13 @@ List<KhmerHoliday> _lunarHolidaysOn(DateTime utc) {
 
   // ១៥ កើត ខែមាឃ — dropped from the public-holiday list in 2020.
   if (month == KhMonth.meak && day == 14) {
-    found.add(const KhmerHoliday(
-      'ពិធីបុណ្យមាឃបូជា',
-      'Meak Bochea',
-      kind: HolidayKind.observance,
-    ));
+    found.add(
+      const KhmerHoliday(
+        'ពិធីបុណ្យមាឃបូជា',
+        'Meak Bochea',
+        kind: HolidayKind.observance,
+      ),
+    );
   }
 
   // ១៥ កើត ខែពិសាខ
@@ -115,29 +114,35 @@ List<KhmerHoliday> _lunarHolidaysOn(DateTime utc) {
 
   // ៤ រោច ខែពិសាខ
   if (month == KhMonth.pisak && day == 18) {
-    found.add(const KhmerHoliday(
-      'ព្រះរាជពិធីច្រត់ព្រះនង្គ័ល',
-      'Royal Ploughing Ceremony',
-    ));
+    found.add(
+      const KhmerHoliday(
+        'ព្រះរាជពិធីច្រត់ព្រះនង្គ័ល',
+        'Royal Ploughing Ceremony',
+      ),
+    );
   }
 
   // ១ រោច ខែអាសាឍ — the second Ashadha in a leap-month year.
   // Religious observances rather than public holidays.
   if ((month == KhMonth.asath || month == KhMonth.tutiyasath) && day == 15) {
-    found.add(const KhmerHoliday(
-      'ពិធីបុណ្យចូលវស្សា',
-      'Chol Vossa',
-      kind: HolidayKind.observance,
-    ));
+    found.add(
+      const KhmerHoliday(
+        'ពិធីបុណ្យចូលវស្សា',
+        'Chol Vossa',
+        kind: HolidayKind.observance,
+      ),
+    );
   }
 
   // ១៥ កើត ខែអស្សុជ
   if (month == KhMonth.assoch && day == 14) {
-    found.add(const KhmerHoliday(
-      'ពិធីបុណ្យចេញវស្សា',
-      'Chenh Vossa',
-      kind: HolidayKind.observance,
-    ));
+    found.add(
+      const KhmerHoliday(
+        'ពិធីបុណ្យចេញវស្សា',
+        'Chenh Vossa',
+        kind: HolidayKind.observance,
+      ),
+    );
   }
 
   // ១៤ កើត – ១ រោច ខែកក្ដិក
@@ -156,11 +161,13 @@ List<KhmerHoliday> _lunarHolidaysOn(DateTime utc) {
 
   // កាន់បិណ្ឌ runs 1 រោច–14 រោច of ភទ្របទ, ending the day before Pchum Ben.
   if (month == KhMonth.phatrabot && day >= 15 && day <= 28) {
-    found.add(KhmerHoliday(
-      'កាន់បិណ្ឌ ទី${day - 14}',
-      'Kan Ben day ${day - 14}',
-      kind: HolidayKind.observance,
-    ));
+    found.add(
+      KhmerHoliday(
+        'កាន់បិណ្ឌ ទី${day - 14}',
+        'Kan Ben day ${day - 14}',
+        kind: HolidayKind.observance,
+      ),
+    );
   }
 
   return found;

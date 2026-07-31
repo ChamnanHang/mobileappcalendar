@@ -118,14 +118,19 @@ void main() {
 
   group('fixed and solar holidays', () {
     test('fixed-date holidays resolve', () {
-      expect(hasHoliday(DateTime(2026, 1, 1), 'International New Year'), isTrue);
+      expect(
+        hasHoliday(DateTime(2026, 1, 1), 'International New Year'),
+        isTrue,
+      );
       expect(
         hasHoliday(DateTime(2026, 1, 7), 'Victory over Genocide Day'),
         isTrue,
       );
       expect(hasHoliday(DateTime(2026, 11, 9), 'Independence Day'), isTrue);
-      expect(hasHoliday(DateTime(2026, 3, 8), "International Women's Day"),
-          isTrue);
+      expect(
+        hasHoliday(DateTime(2026, 3, 8), "International Women's Day"),
+        isTrue,
+      );
     });
 
     test('Khmer New Year comes from the solar computation', () {
@@ -176,12 +181,14 @@ void main() {
       }
 
       // And nothing else in 2026 claims to be a public holiday.
-      final Set<String> officialKeys =
-          official.map((List<int> md) => '${md[0]}-${md[1]}').toSet();
+      final Set<String> officialKeys = official
+          .map((List<int> md) => '${md[0]}-${md[1]}')
+          .toSet();
       DateTime day = DateTime(2026, 1, 1);
       while (day.year == 2026) {
-        final bool isPublic =
-            holidaysOn(day).any((KhmerHoliday h) => h.isPublicHoliday);
+        final bool isPublic = holidaysOn(
+          day,
+        ).any((KhmerHoliday h) => h.isPublicHoliday);
         if (isPublic) {
           expect(
             officialKeys.contains('${day.month}-${day.day}'),
@@ -224,8 +231,9 @@ void main() {
     });
 
     test('Kan Ben days are observances, not public holidays', () {
-      final List<KhmerHoliday> kanBen =
-          holidaysOn(DateTime(2025, 9, 22).subtract(const Duration(days: 5)));
+      final List<KhmerHoliday> kanBen = holidaysOn(
+        DateTime(2025, 9, 22).subtract(const Duration(days: 5)),
+      );
       expect(kanBen, isNotEmpty);
       expect(kanBen.every((KhmerHoliday h) => !h.isPublicHoliday), isTrue);
     });

@@ -81,7 +81,11 @@ class NoteCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           if (isChecklist)
-            _ChecklistPreview(note: note, accent: accent, onToggleItem: onToggleItem)
+            _ChecklistPreview(
+              note: note,
+              accent: accent,
+              onToggleItem: onToggleItem,
+            )
           else if (note.preview.isNotEmpty)
             Text(
               stripMarkdown(note.preview),
@@ -122,9 +126,8 @@ class _ChecklistPreview extends StatelessWidget {
         .where((ChecklistItem i) => i.text.trim().isNotEmpty)
         .take(4)
         .toList();
-    final int remaining = note.items
-            .where((ChecklistItem i) => i.text.trim().isNotEmpty)
-            .length -
+    final int remaining =
+        note.items.where((ChecklistItem i) => i.text.trim().isNotEmpty).length -
         shown.length;
 
     return Column(
@@ -147,9 +150,12 @@ class _ChecklistPreview extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: text.bodySmall?.copyWith(
-                        color: item.done ? AppColors.textLow : AppColors.textMid,
-                        decoration:
-                            item.done ? TextDecoration.lineThrough : null,
+                        color: item.done
+                            ? AppColors.textLow
+                            : AppColors.textMid,
+                        decoration: item.done
+                            ? TextDecoration.lineThrough
+                            : null,
                         decorationColor: AppColors.textLow,
                       ),
                     ),
@@ -176,11 +182,11 @@ class _ChecklistPreview extends StatelessWidget {
               curve: Curves.easeOutCubic,
               builder: (BuildContext context, double value, Widget? _) =>
                   LinearProgressIndicator(
-                value: value,
-                minHeight: 4,
-                backgroundColor: Colors.white.withValues(alpha: 0.07),
-                valueColor: AlwaysStoppedAnimation<Color>(accent),
-              ),
+                    value: value,
+                    minHeight: 4,
+                    backgroundColor: Colors.white.withValues(alpha: 0.07),
+                    valueColor: AlwaysStoppedAnimation<Color>(accent),
+                  ),
             ),
           ),
         ],
@@ -288,9 +294,9 @@ class _TagPill extends StatelessWidget {
       child: Text(
         '#$tag',
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textMid,
-              fontSize: 10,
-            ),
+          color: AppColors.textMid,
+          fontSize: 10,
+        ),
       ),
     );
   }

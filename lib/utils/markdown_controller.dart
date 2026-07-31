@@ -45,8 +45,7 @@ class MarkdownEditingController extends TextEditingController {
     return TextSpan(style: base, children: children);
   }
 
-  Color get _dimColor =>
-      (AppColors.textHigh).withValues(alpha: 0.26);
+  Color get _dimColor => (AppColors.textHigh).withValues(alpha: 0.26);
 
   List<InlineSpan> _lineSpans(String line, TextStyle base) {
     if (line.isEmpty) return const <InlineSpan>[];
@@ -56,7 +55,11 @@ class MarkdownEditingController extends TextEditingController {
     final RegExpMatch? heading = _heading.firstMatch(line);
     if (heading != null) {
       final int level = heading.group(1)!.length;
-      final double scale = switch (level) { 1 => 1.55, 2 => 1.3, _ => 1.14 };
+      final double scale = switch (level) {
+        1 => 1.55,
+        2 => 1.3,
+        _ => 1.14,
+      };
       final TextStyle headingStyle = base.copyWith(
         fontSize: (base.fontSize ?? 16) * scale,
         fontWeight: FontWeight.w700,
@@ -64,7 +67,10 @@ class MarkdownEditingController extends TextEditingController {
         height: 1.3,
       );
       return <InlineSpan>[
-        TextSpan(text: heading.group(0), style: dim.copyWith(fontSize: headingStyle.fontSize)),
+        TextSpan(
+          text: heading.group(0),
+          style: dim.copyWith(fontSize: headingStyle.fontSize),
+        ),
         ..._inlineSpans(line.substring(heading.end), headingStyle),
       ];
     }
@@ -110,14 +116,14 @@ class MarkdownEditingController extends TextEditingController {
       return <InlineSpan>[
         TextSpan(
           text: quote.group(0),
-          style: base.copyWith(color: AppColors.amber, fontWeight: FontWeight.w700),
+          style: base.copyWith(
+            color: AppColors.amber,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         ..._inlineSpans(
           line.substring(quote.end),
-          base.copyWith(
-            color: AppColors.textMid,
-            fontStyle: FontStyle.italic,
-          ),
+          base.copyWith(color: AppColors.textMid, fontStyle: FontStyle.italic),
         ),
       ];
     }
@@ -134,7 +140,9 @@ class MarkdownEditingController extends TextEditingController {
 
     for (final RegExpMatch match in _inline.allMatches(line)) {
       if (match.start > last) {
-        spans.add(TextSpan(text: line.substring(last, match.start), style: base));
+        spans.add(
+          TextSpan(text: line.substring(last, match.start), style: base),
+        );
       }
 
       final String? bold = match.namedGroup('bold');
@@ -173,15 +181,19 @@ class MarkdownEditingController extends TextEditingController {
       }
 
       spans
-        ..add(TextSpan(
-          text: line.substring(match.start, match.start + markerLength),
-          style: dim,
-        ))
+        ..add(
+          TextSpan(
+            text: line.substring(match.start, match.start + markerLength),
+            style: dim,
+          ),
+        )
         ..add(TextSpan(text: content, style: contentStyle))
-        ..add(TextSpan(
-          text: line.substring(match.end - markerLength, match.end),
-          style: dim,
-        ));
+        ..add(
+          TextSpan(
+            text: line.substring(match.end - markerLength, match.end),
+            style: dim,
+          ),
+        );
 
       last = match.end;
     }
@@ -223,14 +235,16 @@ extension MarkdownEditing on TextEditingController {
     final String selected = source.substring(start, end);
 
     final int tokenLength = token.length;
-    final bool alreadyWrapped = start >= tokenLength &&
+    final bool alreadyWrapped =
+        start >= tokenLength &&
         end + tokenLength <= source.length &&
         source.substring(start - tokenLength, start) == token &&
         source.substring(end, end + tokenLength) == token;
 
     if (alreadyWrapped) {
       value = TextEditingValue(
-        text: source.substring(0, start - tokenLength) +
+        text:
+            source.substring(0, start - tokenLength) +
             selected +
             source.substring(end + tokenLength),
         selection: TextSelection(
@@ -243,7 +257,8 @@ extension MarkdownEditing on TextEditingController {
 
     final String placeholder = selected.isEmpty ? '' : selected;
     value = TextEditingValue(
-      text: source.substring(0, start) +
+      text:
+          source.substring(0, start) +
           token +
           placeholder +
           token +
@@ -261,7 +276,8 @@ extension MarkdownEditing on TextEditingController {
     if (!sel.isValid) return;
 
     final String source = text;
-    final int lineStart = source.lastIndexOf('\n', sel.start == 0 ? 0 : sel.start - 1) + 1;
+    final int lineStart =
+        source.lastIndexOf('\n', sel.start == 0 ? 0 : sel.start - 1) + 1;
     int lineEnd = source.indexOf('\n', sel.end);
     if (lineEnd == -1) lineEnd = source.length;
 
@@ -282,7 +298,8 @@ extension MarkdownEditing on TextEditingController {
     final int caret = lineStart + replacement.length;
 
     value = TextEditingValue(
-      text: source.substring(0, lineStart) +
+      text:
+          source.substring(0, lineStart) +
           replacement +
           source.substring(lineEnd),
       selection: TextSelection.collapsed(offset: caret),

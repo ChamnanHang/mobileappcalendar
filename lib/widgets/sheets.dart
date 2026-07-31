@@ -71,7 +71,9 @@ class NoteOptionsSheet extends StatelessWidget {
         SheetTile(
           icon: Icons.sell_outlined,
           label: 'Tags',
-          trailing: note.tags.isEmpty ? 'none' : note.tags.map((String t) => '#$t').join(' '),
+          trailing: note.tags.isEmpty
+              ? 'none'
+              : note.tags.map((String t) => '#$t').join(' '),
           onTap: () => Navigator.of(context).pop(EditorAction.tags),
         ),
         SheetTile(
@@ -126,7 +128,11 @@ class SheetTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 4),
         child: Row(
           children: <Widget>[
-            Icon(icon, size: 20, color: danger ? AppColors.pink : AppColors.textMid),
+            Icon(
+              icon,
+              size: 20,
+              color: danger ? AppColors.pink : AppColors.textMid,
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Text(label, style: text.bodyLarge?.copyWith(color: color)),
@@ -335,8 +341,11 @@ class _FolderPickerSheetState extends State<FolderPickerSheet> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
             children: <Widget>[
-              Icon(Icons.create_new_folder_outlined,
-                  size: 17, color: AppColors.textLow),
+              Icon(
+                Icons.create_new_folder_outlined,
+                size: 17,
+                color: AppColors.textLow,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: TextField(
@@ -456,9 +465,9 @@ class _Chip extends StatelessWidget {
             Text(
               label,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: selected ? AppColors.textHigh : AppColors.textMid,
-                    fontSize: 12,
-                  ),
+                color: selected ? AppColors.textHigh : AppColors.textMid,
+                fontSize: 12,
+              ),
             ),
             if (trailingIcon != null) ...<Widget>[
               const SizedBox(width: 5),
@@ -500,8 +509,9 @@ class _PrimaryButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppTheme.radiusSm + 2),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: (danger ? AppColors.pink : AppColors.violet)
-                  .withValues(alpha: 0.42),
+              color: (danger ? AppColors.pink : AppColors.violet).withValues(
+                alpha: 0.42,
+              ),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -509,10 +519,9 @@ class _PrimaryButton extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: Colors.white,
-                fontSize: 15,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.labelLarge?.copyWith(color: Colors.white, fontSize: 15),
         ),
       ),
     );
@@ -539,9 +548,9 @@ class _GhostButton extends StatelessWidget {
         child: Text(
           label,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: AppColors.textMid,
-                fontSize: 15,
-              ),
+            color: AppColors.textMid,
+            fontSize: 15,
+          ),
         ),
       ),
     );

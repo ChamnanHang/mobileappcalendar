@@ -25,8 +25,9 @@ void main() {
         createdAt: DateTime(2026),
         updatedAt: DateTime(2026),
       );
-      final NotesController c =
-          NotesController(store: MemoryNoteStore(<Note>[note]));
+      final NotesController c = NotesController(
+        store: MemoryNoteStore(<Note>[note]),
+      );
       await c.init();
 
       expect(c.visibleNotes.single.title, 'Saved');
@@ -58,8 +59,10 @@ void main() {
       );
       await c.init();
 
-      expect(c.visibleNotes.map((Note n) => n.id).toList(),
-          <String>['old', 'new']);
+      expect(c.visibleNotes.map((Note n) => n.id).toList(), <String>[
+        'old',
+        'new',
+      ]);
     });
 
     test('empty notes are never persisted', () async {
@@ -75,15 +78,17 @@ void main() {
     test('search matches title, body, tags and checklist items', () async {
       final NotesController c = NotesController(store: MemoryNoteStore());
       await c.init();
-      c.upsert(Note(
-        id: 'x',
-        title: 'Roadmap',
-        body: 'ship the beta',
-        kind: NoteKind.text,
-        tags: <String>['planning'],
-        createdAt: DateTime(2026),
-        updatedAt: DateTime(2026),
-      ));
+      c.upsert(
+        Note(
+          id: 'x',
+          title: 'Roadmap',
+          body: 'ship the beta',
+          kind: NoteKind.text,
+          tags: <String>['planning'],
+          createdAt: DateTime(2026),
+          updatedAt: DateTime(2026),
+        ),
+      );
 
       c.search('beta');
       expect(c.visibleNotes.single.id, 'x');
@@ -95,17 +100,20 @@ void main() {
       expect(c.visibleNotes, isEmpty);
     });
 
-    test('archived notes leave the main list and land in the archive', () async {
-      final NotesController c = NotesController(store: MemoryNoteStore());
-      await c.init();
-      final String id = c.visibleNotes.first.id;
+    test(
+      'archived notes leave the main list and land in the archive',
+      () async {
+        final NotesController c = NotesController(store: MemoryNoteStore());
+        await c.init();
+        final String id = c.visibleNotes.first.id;
 
-      c.setArchived(id, true);
-      expect(c.visibleNotes.any((Note n) => n.id == id), isFalse);
+        c.setArchived(id, true);
+        expect(c.visibleNotes.any((Note n) => n.id == id), isFalse);
 
-      c.setFilter(NoteFilter.archive);
-      expect(c.visibleNotes.single.id, id);
-    });
+        c.setFilter(NoteFilter.archive);
+        expect(c.visibleNotes.single.id, id);
+      },
+    );
 
     test('archiving clears the pin', () async {
       final NotesController c = NotesController(store: MemoryNoteStore());
@@ -144,8 +152,9 @@ void main() {
     test('checklist toggle flips a single item', () async {
       final NotesController c = NotesController(store: MemoryNoteStore());
       await c.init();
-      final Note list =
-          c.visibleNotes.firstWhere((Note n) => n.kind == NoteKind.checklist);
+      final Note list = c.visibleNotes.firstWhere(
+        (Note n) => n.kind == NoteKind.checklist,
+      );
       final ChecklistItem item = list.items.first;
 
       c.toggleChecklistItem(list.id, item.id);
@@ -171,16 +180,18 @@ void main() {
       final MemoryNoteStore store = MemoryNoteStore();
       final NotesController first = NotesController(store: store);
       await first.init();
-      first.upsert(Note(
-        id: 'keep',
-        title: 'Persisted',
-        body: '**bold**',
-        kind: NoteKind.text,
-        tags: <String>['t'],
-        folder: 'Work',
-        createdAt: DateTime(2026),
-        updatedAt: DateTime(2026),
-      ));
+      first.upsert(
+        Note(
+          id: 'keep',
+          title: 'Persisted',
+          body: '**bold**',
+          kind: NoteKind.text,
+          tags: <String>['t'],
+          folder: 'Work',
+          createdAt: DateTime(2026),
+          updatedAt: DateTime(2026),
+        ),
+      );
       await first.flush();
 
       final NotesController second = NotesController(store: store);

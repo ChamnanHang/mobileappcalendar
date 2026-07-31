@@ -1,4 +1,4 @@
-package com.noted.noted
+package com.khmercalendar.noted
 
 import io.flutter.embedding.android.FlutterActivity
 

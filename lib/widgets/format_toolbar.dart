@@ -117,9 +117,9 @@ class _ToolButton extends StatelessWidget {
                 : Text(
                     label!,
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppColors.textMid,
-                          fontSize: 13,
-                        ),
+                      color: AppColors.textMid,
+                      fontSize: 13,
+                    ),
                   ),
           ),
         ),

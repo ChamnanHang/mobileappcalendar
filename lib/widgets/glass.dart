@@ -65,7 +65,10 @@ class GlassPanel extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: <Color>[
                   (fill ?? AppColors.glassFill).withValues(
-                    alpha: ((fill ?? AppColors.glassFill).a + 0.05).clamp(0.0, 1.0),
+                    alpha: ((fill ?? AppColors.glassFill).a + 0.05).clamp(
+                      0.0,
+                      1.0,
+                    ),
                   ),
                   fill ?? AppColors.glassFill,
                 ],
@@ -135,8 +138,9 @@ class _GlassTapPanelState extends State<GlassTapPanel> {
           glow: widget.glow,
           glowOpacity: _down ? 0.34 : 0.18,
           fill: _down ? AppColors.glassFillStrong : AppColors.glassFill,
-          borderColor:
-              _down ? AppColors.glassBorderStrong : AppColors.glassBorder,
+          borderColor: _down
+              ? AppColors.glassBorderStrong
+              : AppColors.glassBorder,
           child: widget.child,
         ),
       ),
@@ -180,11 +184,8 @@ class GlassIconButton extends StatelessWidget {
             tween: ColorTween(end: active ? accent : AppColors.textMid),
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOut,
-            builder: (BuildContext context, Color? value, Widget? _) => Icon(
-              icon,
-              size: 20,
-              color: value ?? AppColors.textMid,
-            ),
+            builder: (BuildContext context, Color? value, Widget? _) =>
+                Icon(icon, size: 20, color: value ?? AppColors.textMid),
           ),
         ),
       ),

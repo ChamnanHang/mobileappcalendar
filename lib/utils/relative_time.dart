@@ -12,8 +12,18 @@ String relativeTime(DateTime when) {
   if (diff.inDays < 7) return '${diff.inDays}d ago';
 
   const List<String> months = <String>[
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   final String label = '${months[when.month - 1]} ${when.day}';
   return when.year == now.year ? label : '$label, ${when.year}';

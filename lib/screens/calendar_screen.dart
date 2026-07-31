@@ -154,10 +154,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
       for (final Note note in notes.activeNotes) dateKey(note.createdAt),
     };
 
-    final List<Note> notesOnSelected = notes.activeNotes
-        .where((Note n) => isSameDay(n.createdAt, _selected))
-        .toList()
-      ..sort((Note a, Note b) => b.updatedAt.compareTo(a.updatedAt));
+    final List<Note> notesOnSelected =
+        notes.activeNotes
+            .where((Note n) => isSameDay(n.createdAt, _selected))
+            .toList()
+          ..sort((Note a, Note b) => b.updatedAt.compareTo(a.updatedAt));
 
     final DateTime selectedUtc = dayOnlyUtc(_selected);
     final bool computed = _error == null;
@@ -199,8 +200,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               lunar: _lunar[dateKey(_selected)],
               formatted: computed ? formatKhmerDate(selectedUtc) : null,
               isHolyDay: _holyDays.contains(dateKey(_selected)),
-              holidays:
-                  _holidays[dateKey(_selected)] ?? const <KhmerHoliday>[],
+              holidays: _holidays[dateKey(_selected)] ?? const <KhmerHoliday>[],
               notes: notesOnSelected,
               onOpenNote: _openNote,
               onNewNote: isSameDay(_selected, DateTime.now())
@@ -274,8 +274,9 @@ class _MonthHeader extends StatelessWidget {
                           '${gregorianMonthName(month.month)} ${toKhmerDigits(month.year)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style:
-                              text.headlineMedium?.copyWith(color: Colors.white),
+                          style: text.headlineMedium?.copyWith(
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -365,9 +366,9 @@ class _WeekdayRow extends StatelessWidget {
               child: Text(
                 weekdayInitials[i],
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: i == 0 ? AppColors.pink : AppColors.textLow,
-                      fontSize: 11.5,
-                    ),
+                  color: i == 0 ? AppColors.pink : AppColors.textLow,
+                  fontSize: 11.5,
+                ),
               ),
             ),
           ),
@@ -422,8 +423,10 @@ class _MonthGrid extends StatelessWidget {
                         isToday: isSameDay(day, today),
                         isSelected: isSameDay(day, selected),
                         isHolyDay: holyDays.contains(key),
-                        isPublicHoliday: (holidays[key] ?? const <KhmerHoliday>[])
-                            .any((KhmerHoliday h) => h.isPublicHoliday),
+                        isPublicHoliday:
+                            (holidays[key] ?? const <KhmerHoliday>[]).any(
+                              (KhmerHoliday h) => h.isPublicHoliday,
+                            ),
                         hasNote: daysWithNotes.contains(key),
                         onTap: () => onSelect(day),
                       ),
@@ -497,16 +500,17 @@ class _DayCell extends StatelessWidget {
               color: isToday
                   ? null
                   : (isSelected
-                      ? accent.withValues(alpha: 0.13)
-                      : Colors.white
-                          .withValues(alpha: inMonth ? 0.035 : 0.012)),
+                        ? accent.withValues(alpha: 0.13)
+                        : Colors.white.withValues(
+                            alpha: inMonth ? 0.035 : 0.012,
+                          )),
               borderRadius: BorderRadius.circular(13),
               border: Border.all(
                 color: isSelected
                     ? accent.withValues(alpha: 0.75)
                     : (isToday
-                        ? AppColors.violet.withValues(alpha: 0.55)
-                        : AppColors.glassBorder),
+                          ? AppColors.violet.withValues(alpha: 0.55)
+                          : AppColors.glassBorder),
                 width: isSelected ? 1.6 : 1,
               ),
               boxShadow: isSelected || isToday
@@ -545,8 +549,8 @@ class _DayCell extends StatelessWidget {
                             color: !inMonth
                                 ? AppColors.textHigh.withValues(alpha: 0.16)
                                 : (isHolyDay
-                                    ? AppColors.amber
-                                    : AppColors.textMid),
+                                      ? AppColors.amber
+                                      : AppColors.textMid),
                           ),
                         ),
                 ),
@@ -554,7 +558,8 @@ class _DayCell extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
-                    if (isHolyDay && inMonth) const _Dot(color: AppColors.amber),
+                    if (isHolyDay && inMonth)
+                      const _Dot(color: AppColors.amber),
                     if (isPublicHoliday && inMonth)
                       const _Dot(color: AppColors.pink),
                     if (hasNote && inMonth) const _Dot(color: AppColors.lime),
@@ -643,7 +648,9 @@ class _DayDetailPanel extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       lunarDayToken(lunar!.day),
-                      style: text.headlineSmall?.copyWith(color: AppColors.cyan),
+                      style: text.headlineSmall?.copyWith(
+                        color: AppColors.cyan,
+                      ),
                     ),
                     Text(
                       'ខែ${lunarMonthName(lunar!.month)}',
@@ -697,8 +704,11 @@ class _DayDetailPanel extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: <Widget>[
-              Icon(Icons.sticky_note_2_outlined,
-                  size: 15, color: AppColors.textLow),
+              Icon(
+                Icons.sticky_note_2_outlined,
+                size: 15,
+                color: AppColors.textLow,
+              ),
               const SizedBox(width: 7),
               Text(
                 notes.isEmpty
@@ -744,14 +754,18 @@ class _DayDetailPanel extends StatelessWidget {
                                 stripMarkdown(note.preview),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: text.labelSmall
-                                    ?.copyWith(color: AppColors.textLow),
+                                style: text.labelSmall?.copyWith(
+                                  color: AppColors.textLow,
+                                ),
                               ),
                           ],
                         ),
                       ),
-                      Icon(Icons.chevron_right_rounded,
-                          size: 18, color: AppColors.textLow),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: AppColors.textLow,
+                      ),
                     ],
                   ),
                 ),
@@ -781,11 +795,7 @@ class _DayDetailPanel extends StatelessWidget {
 }
 
 class _Badge extends StatelessWidget {
-  const _Badge({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
+  const _Badge({required this.icon, required this.label, required this.color});
 
   final IconData icon;
   final String label;
@@ -807,10 +817,10 @@ class _Badge extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
-                ?.copyWith(color: AppColors.textHigh, fontSize: 12),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textHigh,
+              fontSize: 12,
+            ),
           ),
         ],
       ),

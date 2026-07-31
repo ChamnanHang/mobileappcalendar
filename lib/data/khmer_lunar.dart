@@ -62,8 +62,7 @@ int _floorDiv(int a, int b) {
 DateTime _utc(int year, int month, int day, [int hour = 0, int minute = 0]) =>
     DateTime.utc(year, month, day, hour, minute);
 
-DateTime _addDays(DateTime from, int days) =>
-    from.add(Duration(days: days));
+DateTime _addDays(DateTime from, int days) => from.add(Duration(days: days));
 
 /// Fractional days between two instants, mirroring the reference's
 /// `(b - a).total_seconds() / 86400`.
@@ -235,8 +234,10 @@ KhLunarDate findLunarDate(DateTime target) {
 
   khmerDay += _daysBetween(epoch, utcTarget).truncate();
 
-  final int totalDaysOfMonth =
-      getNumberOfDayInKhmerMonth(khmerMonth, getMaybeBeYear(utcTarget));
+  final int totalDaysOfMonth = getNumberOfDayInKhmerMonth(
+    khmerMonth,
+    getMaybeBeYear(utcTarget),
+  );
   if (totalDaysOfMonth <= khmerDay) {
     khmerDay = khmerDay % totalDaysOfMonth;
     khmerMonth = nextMonthOf(khmerMonth, getMaybeBeYear(epoch));
@@ -454,7 +455,8 @@ int _sunInaugurationAsLibda(int jsYear, int sotin) {
   final int chhaya = (khan >= 0 && khan < 6) ? chhayas[khan] : 134;
 
   final int q = _floorDiv(pouichalip * multiplicity, 900);
-  final int pholAsLibda = (60 * _floorDiv(q + chhaya, 60)) + ((q + chhaya) % 60);
+  final int pholAsLibda =
+      (60 * _floorDiv(q + chhaya, 60)) + ((q + chhaya) % 60);
 
   return kaen <= 5 ? sunAverage - pholAsLibda : sunAverage + pholAsLibda;
 }
@@ -485,12 +487,18 @@ int _lunarDaysBetween(
 /// of 24 and makes the service return 500 for such years (1974, for example).
 /// Here hour 24 simply rolls into the next day.
 List<DateTime> khmerNewYearDays(int gregorianYear) {
-  final SoriyatraLerngSak info =
-      getSoriyatraLerngSak(gregorianYear + 544 - 1182);
+  final SoriyatraLerngSak info = getSoriyatraLerngSak(
+    gregorianYear + 544 - 1182,
+  );
   final int numberOfDays = info.newYearDayAngsarIsZero ? 4 : 3;
 
-  final DateTime epochLerngSak =
-      _utc(gregorianYear, 4, 17, info.hour, info.minute);
+  final DateTime epochLerngSak = _utc(
+    gregorianYear,
+    4,
+    17,
+    info.hour,
+    info.minute,
+  );
 
   final KhLunarDate khEpoch = findLunarDate(epochLerngSak);
   final int beYear = getMaybeBeYear(epochLerngSak);
@@ -503,8 +511,10 @@ List<DateTime> khmerNewYearDays(int gregorianYear) {
     beYear,
   );
 
-  final DateTime start =
-      _addDays(epochLerngSak, -(diffFromEpoch + numberOfDays - 1));
+  final DateTime start = _addDays(
+    epochLerngSak,
+    -(diffFromEpoch + numberOfDays - 1),
+  );
 
   return List<DateTime>.generate(numberOfDays, (int i) => _addDays(start, i));
 }
@@ -554,12 +564,7 @@ String formatKhmerDate(DateTime date) {
       'ពុទ្ធសករាជ ${toKhmerDigits(getBeYear(date))}';
 }
 
-const Set<String> _holyDayTokens = <String>{
-  '៨កើត',
-  '៨រោច',
-  '១៥កើត',
-  '១៥រោច',
-};
+const Set<String> _holyDayTokens = <String>{'៨កើត', '៨រោច', '១៥កើត', '១៥រោច'};
 
 /// Buddhist holy day (ថ្ងៃសីល): the 8th and 15th of either fortnight, plus the
 /// 14th waning when it closes a short month (the next day is the 1st waxing).

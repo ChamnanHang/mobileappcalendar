@@ -18,8 +18,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
   }
 
-  testWidgets('renders the grid with computed lunar days',
-      (WidgetTester tester) async {
+  testWidgets('renders the grid with computed lunar days', (
+    WidgetTester tester,
+  ) async {
     await openCalendar(tester);
 
     // Sunday-first weekday headers.
@@ -34,13 +35,15 @@ void main() {
     expect(find.text(token), findsWidgets);
   });
 
-  testWidgets('detail panel shows the computed Khmer sentence for today',
-      (WidgetTester tester) async {
+  testWidgets('detail panel shows the computed Khmer sentence for today', (
+    WidgetTester tester,
+  ) async {
     await openCalendar(tester);
 
     final DateTime today = DateTime.now();
-    final String sentence =
-        formatKhmerDate(DateTime.utc(today.year, today.month, today.day));
+    final String sentence = formatKhmerDate(
+      DateTime.utc(today.year, today.month, today.day),
+    );
 
     // The panel sits below the grid, off-screen at the default test size.
     await tester.drag(find.byType(ListView), const Offset(0, -500));
@@ -51,8 +54,9 @@ void main() {
     expect(find.text('New note for today'), findsOneWidget);
   });
 
-  testWidgets('month navigation moves the header without any loading state',
-      (WidgetTester tester) async {
+  testWidgets('month navigation moves the header without any loading state', (
+    WidgetTester tester,
+  ) async {
     await openCalendar(tester);
 
     final DateTime now = DateTime.now();
@@ -71,14 +75,16 @@ void main() {
 
     expect(
       find.text(
-          '${gregorianMonthName(next.month)} ${toKhmerDigits(next.year)}'),
+        '${gregorianMonthName(next.month)} ${toKhmerDigits(next.year)}',
+      ),
       findsOneWidget,
     );
     expect(find.byType(LinearProgressIndicator), findsNothing);
   });
 
-  testWidgets('header opens the picker and jumps to another year and month',
-      (WidgetTester tester) async {
+  testWidgets('header opens the picker and jumps to another year and month', (
+    WidgetTester tester,
+  ) async {
     await openCalendar(tester);
 
     final DateTime now = DateTime.now();
@@ -139,8 +145,9 @@ void main() {
     );
   });
 
-  testWidgets('picker year strip jumps directly to a tapped year',
-      (WidgetTester tester) async {
+  testWidgets('picker year strip jumps directly to a tapped year', (
+    WidgetTester tester,
+  ) async {
     await openCalendar(tester);
 
     final DateTime now = DateTime.now();
@@ -159,13 +166,15 @@ void main() {
 
     expect(
       find.text(
-          '${gregorianMonthName(now.month)} ${toKhmerDigits(now.year + 1)}'),
+        '${gregorianMonthName(now.month)} ${toKhmerDigits(now.year + 1)}',
+      ),
       findsOneWidget,
     );
   });
 
-  testWidgets('the detail panel always describes a day in the visible month',
-      (WidgetTester tester) async {
+  testWidgets('the detail panel always describes a day in the visible month', (
+    WidgetTester tester,
+  ) async {
     await openCalendar(tester);
 
     // Step forward two months; the selection must follow, otherwise the panel
@@ -195,8 +204,9 @@ void main() {
     );
   });
 
-  testWidgets('today button returns to the current month',
-      (WidgetTester tester) async {
+  testWidgets('today button returns to the current month', (
+    WidgetTester tester,
+  ) async {
     await openCalendar(tester);
 
     await tester.tap(find.byTooltip('Next month'));

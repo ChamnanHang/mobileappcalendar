@@ -86,13 +86,16 @@ void main() {
     for (final dynamic row in rows) {
       final List<dynamic> entry = row as List<dynamic>;
       final int year = entry[0] as int;
-      final List<String> expected =
-          (entry[2] as List<dynamic>).cast<String>();
+      final List<String> expected = (entry[2] as List<dynamic>).cast<String>();
 
       final List<DateTime> actual = khmerNewYearDays(year);
 
       expect(actual.map(isoNoZone).toList(), expected, reason: 'year $year');
-      expect(isoNoZone(khmerNewYearMoment(year)), entry[1], reason: 'year $year');
+      expect(
+        isoNoZone(khmerNewYearMoment(year)),
+        entry[1],
+        reason: 'year $year',
+      );
     }
   });
 
@@ -117,8 +120,7 @@ void main() {
     while (day.isBefore(DateTime.utc(2027, 4, 1))) {
       if (isBuddhistHolyDay(day)) {
         final int number = (findLunarDate(day).day % 15) + 1;
-        expect(number, anyOf(8, 15, 14),
-            reason: 'unexpected holy day on $day');
+        expect(number, anyOf(8, 15, 14), reason: 'unexpected holy day on $day');
       }
       day = day.add(const Duration(days: 1));
     }
@@ -138,7 +140,10 @@ void main() {
     }
     watch.stop();
 
-    expect(watch.elapsedMilliseconds, lessThan(200),
-        reason: 'took ${watch.elapsedMilliseconds}ms');
+    expect(
+      watch.elapsedMilliseconds,
+      lessThan(200),
+      reason: 'took ${watch.elapsedMilliseconds}ms',
+    );
   });
 }

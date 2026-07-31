@@ -21,23 +21,20 @@ class ChecklistItem {
   final String text;
   final bool done;
 
-  ChecklistItem copyWith({String? text, bool? done}) => ChecklistItem(
-        id: id,
-        text: text ?? this.text,
-        done: done ?? this.done,
-      );
+  ChecklistItem copyWith({String? text, bool? done}) =>
+      ChecklistItem(id: id, text: text ?? this.text, done: done ?? this.done);
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'text': text,
-        'done': done,
-      };
+    'id': id,
+    'text': text,
+    'done': done,
+  };
 
   static ChecklistItem fromJson(Map<String, dynamic> json) => ChecklistItem(
-        id: json['id'] as String? ?? newId(),
-        text: json['text'] as String? ?? '',
-        done: json['done'] as bool? ?? false,
-      );
+    id: json['id'] as String? ?? newId(),
+    text: json['text'] as String? ?? '',
+    done: json['done'] as bool? ?? false,
+  );
 }
 
 class Note {
@@ -57,7 +54,11 @@ class Note {
     this.archived = false,
   });
 
-  factory Note.empty({NoteKind kind = NoteKind.text, String? folder, int accent = 0}) {
+  factory Note.empty({
+    NoteKind kind = NoteKind.text,
+    String? folder,
+    int accent = 0,
+  }) {
     final DateTime now = DateTime.now();
     return Note(
       id: newId(),
@@ -141,20 +142,20 @@ class Note {
   static const Object _sentinel = Object();
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'title': title,
-        'body': body,
-        'kind': kind.name,
-        'items': items.map((ChecklistItem i) => i.toJson()).toList(),
-        'tags': tags,
-        'folder': folder,
-        'accent': accent,
-        'pinned': pinned,
-        'favorite': favorite,
-        'archived': archived,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'title': title,
+    'body': body,
+    'kind': kind.name,
+    'items': items.map((ChecklistItem i) => i.toJson()).toList(),
+    'tags': tags,
+    'folder': folder,
+    'accent': accent,
+    'pinned': pinned,
+    'favorite': favorite,
+    'archived': archived,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 
   static Note fromJson(Map<String, dynamic> json) {
     final DateTime now = DateTime.now();

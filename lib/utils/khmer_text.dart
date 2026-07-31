@@ -6,7 +6,16 @@
 library;
 
 const List<String> _khmerDigits = <String>[
-  '០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩',
+  '០',
+  '១',
+  '២',
+  '៣',
+  '៤',
+  '៥',
+  '៦',
+  '៧',
+  '៨',
+  '៩',
 ];
 
 /// Converts every ASCII digit in [input] to its Khmer numeral.
@@ -44,7 +53,8 @@ const List<String> khmerLunarMonths = <String>[
   'ទុតិយាសាឍ', // 13
 ];
 
-String lunarMonthName(int index) => index >= 0 && index < khmerLunarMonths.length
+String lunarMonthName(int index) =>
+    index >= 0 && index < khmerLunarMonths.length
     ? khmerLunarMonths[index]
     : '—';
 

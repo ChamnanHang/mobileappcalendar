@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/ads.dart';
 import '../screens/calendar_screen.dart';
 import '../screens/home_screen.dart';
 import '../theme/app_colors.dart';
@@ -38,16 +39,23 @@ class _AppShellState extends State<AppShell> {
               const SizedBox.shrink(),
           ],
         ),
-        bottomNavigationBar: _GlassNavBar(
-          index: _index,
-          onChanged: (int value) {
-            if (value == _index) return;
-            HapticFeedback.selectionClick();
-            setState(() {
-              _index = value;
-              if (value == 1) _calendarVisited = true;
-            });
-          },
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            // Renders nothing unless ads are enabled on a mobile build.
+            const AdBanner(),
+            _GlassNavBar(
+              index: _index,
+              onChanged: (int value) {
+                if (value == _index) return;
+                HapticFeedback.selectionClick();
+                setState(() {
+                  _index = value;
+                  if (value == 1) _calendarVisited = true;
+                });
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -126,9 +134,7 @@ class _NavItem extends StatelessWidget {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: selected
-              ? accent.withValues(alpha: 0.15)
-              : Colors.transparent,
+          color: selected ? accent.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: selected
@@ -148,11 +154,7 @@ class _NavItem extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            Icon(
-              icon,
-              size: 19,
-              color: selected ? accent : AppColors.textLow,
-            ),
+            Icon(icon, size: 19, color: selected ? accent : AppColors.textLow),
             const SizedBox(width: 8),
             // Flexible so the bar survives very narrow layouts instead of
             // overflowing.
@@ -162,9 +164,9 @@ class _NavItem extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontSize: 13.5,
-                      color: selected ? AppColors.textHigh : AppColors.textLow,
-                    ),
+                  fontSize: 13.5,
+                  color: selected ? AppColors.textHigh : AppColors.textLow,
+                ),
               ),
             ),
           ],
