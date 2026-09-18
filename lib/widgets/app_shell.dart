@@ -126,50 +126,62 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? accent.withValues(alpha: 0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
             color: selected
-                ? accent.withValues(alpha: 0.42)
+                ? accent.withValues(alpha: 0.15)
                 : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected
+                  ? accent.withValues(alpha: 0.42)
+                  : Colors.transparent,
+            ),
+            boxShadow: selected
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.22),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : null,
           ),
-          boxShadow: selected
-              ? <BoxShadow>[
-                  BoxShadow(
-                    color: accent.withValues(alpha: 0.22),
-                    blurRadius: 18,
-                    offset: const Offset(0, 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Icon(
+                icon,
+                size: 19,
+                color: selected ? accent : AppColors.textLow,
+              ),
+              const SizedBox(width: 8),
+              // Flexible so the bar survives very narrow layouts instead of
+              // overflowing.
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontSize: 13.5,
+                    color: selected ? AppColors.textHigh : AppColors.textLow,
                   ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Icon(icon, size: 19, color: selected ? accent : AppColors.textLow),
-            const SizedBox(width: 8),
-            // Flexible so the bar survives very narrow layouts instead of
-            // overflowing.
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontSize: 13.5,
-                  color: selected ? AppColors.textHigh : AppColors.textLow,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

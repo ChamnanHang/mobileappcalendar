@@ -6,8 +6,16 @@ import '../theme/app_colors.dart';
 
 /// Slow-drifting neon "aurora" blobs behind the whole app. Pure gradients —
 /// no blur filters — so it stays cheap on mobile and web.
+///
+/// Two of these can be mounted at once: the shell owns one, and the editor
+/// pushes an opaque route with another. They are kept in phase through a
+/// process-wide stopwatch, so the background no longer jumps mid-transition
+/// when the editor fades in over the list.
 class AuroraBackground extends StatefulWidget {
   const AuroraBackground({super.key, required this.child});
+
+  /// One full drift cycle.
+  static const Duration period = Duration(seconds: 24);
 
   final Widget child;
 
@@ -17,10 +25,42 @@ class AuroraBackground extends StatefulWidget {
 
 class _AuroraBackgroundState extends State<AuroraBackground>
     with SingleTickerProviderStateMixin {
+  /// Shared wall clock. Every instance derives its phase offset from this, so
+  /// one mounted ten seconds after another still paints the same frame.
+  static final Stopwatch _sharedClock = Stopwatch()..start();
+
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(seconds: 24),
-  )..repeat();
+    duration: AuroraBackground.period,
+  );
+
+  /// Where in the cycle this instance was mounted.
+  late final double _phaseOffset =
+      (_sharedClock.elapsedMilliseconds %
+          AuroraBackground.period.inMilliseconds) /
+      AuroraBackground.period.inMilliseconds;
+
+  bool _animating = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // "Reduce Motion" on iOS and "Remove animations" on Android both surface
+    // here. A continuously repainting full-screen background is exactly the
+    // kind of ambient movement those settings exist to stop — and skipping it
+    // also saves the GPU a repaint every frame.
+    _setAnimating(!MediaQuery.disableAnimationsOf(context));
+  }
+
+  void _setAnimating(bool value) {
+    if (_animating == value) return;
+    _animating = value;
+    if (value) {
+      _controller.repeat();
+    } else {
+      _controller.stop();
+    }
+  }
 
   @override
   void dispose() {
@@ -46,7 +86,13 @@ class _AuroraBackgroundState extends State<AuroraBackground>
                 animation: _controller,
                 builder: (BuildContext context, Widget? _) {
                   return CustomPaint(
-                    painter: _AuroraPainter(_controller.value),
+                    painter: _AuroraPainter(
+                      (_controller.value + _phaseOffset) % 1.0,
+                    ),
+                    // Nothing here reacts to input, and the blobs are the only
+                    // thing painted, so the layer can be sized by the parent.
+                    isComplex: true,
+                    willChange: _animating,
                   );
                 },
               ),
@@ -74,6 +120,8 @@ class _AuroraPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final double tau = t * 2 * math.pi;
+    // One Paint for the whole pass; only the shader changes per blob.
+    final Paint paint = Paint();
 
     for (int i = 0; i < _blobs.length; i++) {
       final _Blob blob = _blobs[i];
@@ -86,14 +134,13 @@ class _AuroraPainter extends CustomPainter {
       final double radius =
           blob.radius * size.shortestSide * (1 + 0.06 * math.sin(phase));
 
-      final Paint paint = Paint()
-        ..shader = RadialGradient(
-          colors: <Color>[
-            blob.color.withValues(alpha: blob.opacity),
-            blob.color.withValues(alpha: 0),
-          ],
-          stops: const <double>[0, 1],
-        ).createShader(Rect.fromCircle(center: center, radius: radius));
+      paint.shader = RadialGradient(
+        colors: <Color>[
+          blob.color.withValues(alpha: blob.opacity),
+          blob.color.withValues(alpha: 0),
+        ],
+        stops: const <double>[0, 1],
+      ).createShader(Rect.fromCircle(center: center, radius: radius));
 
       canvas.drawCircle(center, radius, paint);
     }

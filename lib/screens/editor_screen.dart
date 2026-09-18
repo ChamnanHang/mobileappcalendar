@@ -72,21 +72,37 @@ class _EditorScreenState extends State<EditorScreen> {
   // ------------------------------------------------------------------ state
 
   /// Updates the local note and schedules a commit.
-  void _update(Note next, {bool immediate = false}) {
-    setState(() {
-      _note = next.copyWith(updatedAt: DateTime.now());
+  ///
+  /// [rebuild] is false for edits the widget tree does not actually reflect —
+  /// typing into the title, the body or a checklist row, where the `TextField`
+  /// already owns the text through its controller. Those used to call
+  /// `setState` on every keystroke, rebuilding the header, the whole list, the
+  /// accent picker and the blurred format toolbar for a character that changed
+  /// nothing on screen.
+  void _update(Note next, {bool immediate = false, bool rebuild = true}) {
+    final Note updated = next.copyWith(updatedAt: DateTime.now());
+    if (rebuild) {
+      setState(() {
+        _note = updated;
+        _dirty = true;
+      });
+    } else {
+      _note = updated;
       _dirty = true;
-    });
+    }
+
     _debounce?.cancel();
     if (immediate) {
-      _notes?.upsert(_note);
-      _dirty = false;
+      _commit();
     } else {
-      _debounce = Timer(const Duration(milliseconds: 500), () {
-        _notes?.upsert(_note);
-        _dirty = false;
-      });
+      _debounce = Timer(const Duration(milliseconds: 500), _commit);
     }
+  }
+
+  void _commit() {
+    _debounce = null;
+    _notes?.upsert(_note);
+    _dirty = false;
   }
 
   TextEditingController _controllerFor(ChecklistItem item) {
@@ -100,8 +116,8 @@ class _EditorScreenState extends State<EditorScreen> {
     return _itemFocus.putIfAbsent(item.id, FocusNode.new);
   }
 
-  void _setItems(List<ChecklistItem> items) =>
-      _update(_note.copyWith(items: items));
+  void _setItems(List<ChecklistItem> items, {bool rebuild = true}) =>
+      _update(_note.copyWith(items: items), rebuild: rebuild);
 
   void _addItem({int? after}) {
     final ChecklistItem item = ChecklistItem(id: newId(), text: '');
@@ -247,7 +263,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       controller: _titleController,
                       autofocus: !widget.autofocusBody && _note.title.isEmpty,
                       onChanged: (String value) =>
-                          _update(_note.copyWith(title: value)),
+                          _update(_note.copyWith(title: value), rebuild: false),
                       onSubmitted: () {
                         if (isChecklist) {
                           if (_note.items.isNotEmpty) {
@@ -277,6 +293,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                       : i,
                                 )
                                 .toList(),
+                            rebuild: false,
                           );
                         },
                         onSubmit: (ChecklistItem item) => _addItem(
@@ -292,8 +309,10 @@ class _EditorScreenState extends State<EditorScreen> {
                         controller: _bodyController,
                         focusNode: _bodyFocus,
                         autofocus: widget.autofocusBody,
-                        onChanged: (String value) =>
-                            _update(_note.copyWith(body: value)),
+                        onChanged: (String value) => _update(
+                          _note.copyWith(body: value),
+                          rebuild: false,
+                        ),
                       ),
                     const SizedBox(height: 22),
                     _TagsRow(
@@ -564,18 +583,21 @@ class _ChecklistEditor extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onToggle(item),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 2,
+                Semantics(
+                  checked: item.done,
+                  label: item.text.trim().isEmpty
+                      ? 'List item'
+                      : item.text.trim(),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onToggle(item),
+                    child: TapTarget(
+                      size: 44,
+                      child: _BigTick(done: item.done, accent: accent),
                     ),
-                    child: _BigTick(done: item.done, accent: accent),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 4),
                 Expanded(
                   child: TextField(
                     controller: controllerFor(item),
@@ -592,15 +614,19 @@ class _ChecklistEditor extends StatelessWidget {
                     decoration: const InputDecoration(hintText: 'List item'),
                   ),
                 ),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onRemove(item),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Icon(
-                      Icons.close_rounded,
-                      size: 16,
-                      color: AppColors.textLow,
+                Semantics(
+                  button: true,
+                  label: 'Remove item',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onRemove(item),
+                    child: TapTarget(
+                      size: 44,
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: AppColors.textLow,
+                      ),
                     ),
                   ),
                 ),
@@ -608,15 +634,26 @@ class _ChecklistEditor extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 6),
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onAdd,
-          child: Row(
-            children: <Widget>[
-              Icon(Icons.add_rounded, size: 18, color: accent),
-              const SizedBox(width: 8),
-              Text('Add item', style: text.bodyMedium?.copyWith(color: accent)),
-            ],
+        Semantics(
+          button: true,
+          label: 'Add item',
+          excludeSemantics: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onAdd,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Row(
+                children: <Widget>[
+                  Icon(Icons.add_rounded, size: 18, color: accent),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Add item',
+                    style: text.bodyMedium?.copyWith(color: accent),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ],
@@ -680,52 +717,66 @@ class _TagsRow extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: <Widget>[
         for (final String tag in tags)
-          GestureDetector(
-            onTap: () => onRemove(tag),
+          Semantics(
+            button: true,
+            label: 'Remove tag $tag',
+            excludeSemantics: true,
+            child: GestureDetector(
+              onTap: () => onRemove(tag),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(11, 8, 8, 8),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: accent.withValues(alpha: 0.32)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      '#$tag',
+                      style: text.labelSmall?.copyWith(
+                        color: AppColors.textHigh,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.close_rounded,
+                      size: 13,
+                      color: AppColors.textMid,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        Semantics(
+          button: true,
+          label: 'Add tag',
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: onEdit,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(11, 6, 8, 6),
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
               decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: accent.withValues(alpha: 0.32)),
+                border: Border.all(color: AppColors.glassBorder),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
+                  Icon(Icons.add_rounded, size: 14, color: AppColors.textMid),
+                  const SizedBox(width: 4),
                   Text(
-                    '#$tag',
+                    'Tag',
                     style: text.labelSmall?.copyWith(
-                      color: AppColors.textHigh,
+                      color: AppColors.textMid,
                       fontSize: 12,
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.close_rounded, size: 13, color: AppColors.textMid),
                 ],
               ),
-            ),
-          ),
-        GestureDetector(
-          onTap: onEdit,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.glassBorder),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(Icons.add_rounded, size: 14, color: AppColors.textMid),
-                const SizedBox(width: 4),
-                Text(
-                  'Tag',
-                  style: text.labelSmall?.copyWith(
-                    color: AppColors.textMid,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
             ),
           ),
         ),
@@ -750,36 +801,45 @@ class _AccentPicker extends StatelessWidget {
             context,
           ).textTheme.labelSmall?.copyWith(color: AppColors.textLow),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 6),
         for (int i = 0; i < AppColors.accents.length; i++)
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onSelect(i);
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              margin: const EdgeInsets.only(right: 10),
-              width: selected == i ? 26 : 20,
-              height: selected == i ? 26 : 20,
-              decoration: BoxDecoration(
-                color: AppColors.accents[i],
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: selected == i
-                      ? Colors.white.withValues(alpha: 0.9)
-                      : Colors.transparent,
-                  width: 2,
-                ),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: AppColors.accents[i].withValues(
-                      alpha: selected == i ? 0.65 : 0.3,
+          Semantics(
+            button: true,
+            selected: selected == i,
+            label: AppColors.accentNames[i],
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                onSelect(i);
+              },
+              // The dot is 20-26dp; the touch area around it is not.
+              child: TapTarget(
+                size: 44,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  width: selected == i ? 26 : 20,
+                  height: selected == i ? 26 : 20,
+                  decoration: BoxDecoration(
+                    color: AppColors.accents[i],
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected == i
+                          ? Colors.white.withValues(alpha: 0.9)
+                          : Colors.transparent,
+                      width: 2,
                     ),
-                    blurRadius: selected == i ? 12 : 6,
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: AppColors.accents[i].withValues(
+                          alpha: selected == i ? 0.65 : 0.3,
+                        ),
+                        blurRadius: selected == i ? 12 : 6,
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
