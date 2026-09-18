@@ -17,6 +17,15 @@ jobs:
       - run: flutter analyze
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test
+      - name: No test ad unit IDs in a shipped manifest
+        # Google's sample IDs must never reach a store build. They are the
+        # defaults for local runs, so this only guards against someone
+        # hard-coding them in place of the --dart-define.
+        run: |
+          if grep -rn "ca-app-pub-3940256099942544" lib/ ; then
+            echo "::error::Google test ad IDs are hard-coded in lib/."
+            exit 1
+          fi
       - name: Run tests
         # Includes the differential suite that checks the Khmer calendar
         # against 5,706 dates from the Python reference.
@@ -36,4 +45,6 @@ jobs:
           channel: stable
       - run: flutter pub get
       # Debug-signed: release signing needs the keystore, which is not in the repo.
+      # This still exercises the release Gradle path — R8, resource shrinking
+      # and the manifest merge — which is where store builds usually break.
       - run: flutter build appbundle --debug

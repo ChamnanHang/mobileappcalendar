@@ -1,8 +1,24 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Declared explicitly rather than left to arrive via manifest merge from
+         the AdMob SDK, so it is visible when filling in Play's Data safety
+         form: the app requests a banner and the SDK reads the advertising ID.
+         If you ship without ads, uncomment the tools:node line below — Play
+         flags an app that declares AD_ID but never uses it. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
+    <!-- <uses-permission android:name="com.google.android.gms.permission.AD_ID"
+         tools:node="remove" /> -->
+
     <application
         android:label="Noted"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@style/NormalTheme"
+        android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

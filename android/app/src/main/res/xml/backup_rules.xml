@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and below (android:fullBackupContent).
+
+     Notes live in SharedPreferences under the key noted.notes.v1, so including
+     shared_prefs is what makes them survive a device migration or a restore.
+     Nothing else here is worth backing up. -->
+<full-backup-content>
+    <include domain="sharedpref" path="." />
+</full-backup-content>

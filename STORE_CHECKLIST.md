@@ -72,12 +72,42 @@ password, or a manual decision — I can't do these).
 ## 6. Privacy — required by both stores
 
 - **[done]** `ios/Runner/PrivacyInfo.xcprivacy` declares UserDefaults use and AdMob's device-ID
-  collection. ⚠️ **Add it to the Runner target in Xcode** (drag into the project, confirm it appears
-  under Build Phases → Copy Bundle Resources) — a file on disk alone is not bundled.
+  collection, **and is wired into the Runner target** — it has a file reference, sits in the Runner
+  group and is listed under Build Phases → Copy Bundle Resources, so it actually ships. Confirm with
+  `grep PrivacyInfo ios/Runner.xcodeproj/project.pbxproj` (four hits) after any Xcode project churn.
+- **[done]** `ITSAppUsesNonExemptEncryption` is `false` in `Info.plist`, so App Store Connect stops
+  asking the export-compliance question on every upload. Revisit only if custom cryptography is added.
 - **[you]** A **publicly hosted privacy policy URL**. Both stores reject without one, and ads make
   it mandatory. GitHub Pages is fine.
 - **[you]** Play **Data safety** form and Apple **App Privacy** — declare: notes stay on device;
   AdMob collects device/advertising identifiers for third-party advertising.
+
+## 6b. Platform polish already handled
+
+- **[done]** **No launch flash.** The Android `LaunchTheme` used `Theme.Light` with a white splash
+  drawable, and the iOS `LaunchScreen.storyboard` had a white background — so a dark-only app
+  flashed white on every cold start, worst on a light-mode device. Both now use `AppColors.bg`
+  (`#06070F`), and `UIUserInterfaceStyle` is pinned to `Dark`.
+- **[done]** **Predictive back** (`android:enableOnBackInvokedCallback="true"`), required behaviour
+  on Android 13+ and expected by reviewers on 14+.
+- **[done]** **Backup rules.** `backup_rules.xml` (Android 11 and below) and
+  `data_extraction_rules.xml` (12+) both include `sharedpref`, so notes survive a restore or a
+  phone-to-phone transfer. Without them the default is broader than it needs to be and undeclared.
+- **[done]** **`AD_ID` permission declared explicitly** in `AndroidManifest.xml` rather than
+  arriving silently through the AdMob manifest merge, so it is obvious when filling in Data safety.
+  Shipping without ads? Uncomment the `tools:node="remove"` line — Play flags an app that declares
+  `AD_ID` and never uses it.
+- **[done]** **Notes are not lost when the app is backgrounded.** Writes are debounced; an
+  `AppLifecycleListener` flushes anything pending on inactive/pause/hide/detach, and `dispose`
+  writes rather than cancelling. Both platforms can kill a backgrounded process without warning.
+- **[done]** **No crash artefacts in release.** `ErrorWidget.builder` renders `AppErrorView` instead
+  of Flutter's grey (release) or red (debug) error box.
+- **[done]** **Accessibility.** Every icon-only control has a label and a 44–48dp touch target,
+  calendar cells announce their full date plus lunar day and holidays, checklist rows expose a
+  checked state, note cards offer archive and more-actions as semantic actions (swipe and
+  long-press are unreachable with a screen reader), and text scale is clamped to 0.85–1.35 so
+  accessibility font sizes do not break the compact chrome.
+- **[done]** **Reduce Motion** (iOS) / **Remove animations** (Android) stops the aurora repainting.
 
 ## 7. Store listing assets
 
@@ -103,6 +133,15 @@ reused build number.
 
 ## Not yet verified
 
-Neither release build has been compiled — this Mac has no Xcode and no Android SDK, so
-`flutter build appbundle` and `flutter build ipa` have never run. Everything above is configuration
-review, not a successful build. Expect to fix a few Gradle/CocoaPods issues on first run.
+**Neither release build has been compiled.** The environment this was last worked in has the Flutter
+SDK but no Android SDK and no Xcode, so `flutter build appbundle` and `flutter build ipa` have never
+run. `flutter analyze` is clean and the full test suite passes, but that covers Dart only — it says
+nothing about Gradle, R8, the manifest merge, CocoaPods or code signing.
+
+Everything marked **[done]** above is configuration that has been read, edited and checked for
+well-formedness (the plist parses, the XML parses, the `.pbxproj` sections and brace balance are
+intact) — not configuration proven by a green build. Expect to fix a few Gradle/CocoaPods issues on
+the first real run.
+
+The `build-android` CI job builds a debug-signed bundle, which does exercise the release Gradle path
+(R8, resource shrinking, manifest merge) even though it cannot exercise release signing.
