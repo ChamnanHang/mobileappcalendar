@@ -1,12 +1,17 @@
 import 'dart:math';
 
+import '../utils/markdown_text.dart';
+
 /// A note is either free-form (markdown) text or a checklist.
 enum NoteKind { text, checklist }
 
+/// One generator for the process — constructing a `Random` per call is both
+/// slower and a weaker source of entropy than reusing one.
+final Random _rnd = Random();
+
 String newId() {
-  final Random rnd = Random();
   final int stamp = DateTime.now().microsecondsSinceEpoch;
-  final int salt = rnd.nextInt(0x7fffffff);
+  final int salt = _rnd.nextInt(0x7fffffff);
   return '${stamp.toRadixString(36)}${salt.toRadixString(36)}';
 }
 
@@ -98,8 +103,17 @@ class Note {
 
   double get progress => items.isEmpty ? 0 : doneCount / items.length;
 
-  /// First non-empty line of the body, used for card previews.
-  String get preview {
+  // A note is immutable, so anything derived from it can be computed once and
+  // kept. `copyWith` returns a fresh instance, which drops these caches with
+  // it — there is nothing to invalidate by hand.
+  String? _preview;
+  String? _plainPreview;
+  String? _haystack;
+
+  /// Raw preview source: the body, or the checklist items joined up.
+  String get preview => _preview ??= _buildPreview();
+
+  String _buildPreview() {
     if (kind == NoteKind.checklist) {
       return items
           .where((ChecklistItem i) => i.text.trim().isNotEmpty)
@@ -108,6 +122,24 @@ class Note {
     }
     return body.trim();
   }
+
+  /// [preview] with markdown syntax removed, ready to render on a card.
+  ///
+  /// Cached because stripping runs eight regex passes, and the grid used to
+  /// redo that for every visible card on every rebuild.
+  String get plainPreview => _plainPreview ??= stripMarkdown(preview);
+
+  /// Everything this note can be searched by, folded to lower case once.
+  String get _searchHaystack => _haystack ??= <String>[
+    title,
+    body,
+    ...tags,
+    ...items.map((ChecklistItem i) => i.text),
+  ].join('\n').toLowerCase();
+
+  /// Whether this note matches an already-lower-cased [query].
+  bool matches(String query) =>
+      query.isEmpty || _searchHaystack.contains(query);
 
   Note copyWith({
     String? title,

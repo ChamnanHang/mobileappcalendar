@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/khmer_holidays.dart';
 import '../data/khmer_lunar.dart';
+import '../data/khmer_month.dart';
 import '../data/notes_controller.dart';
 import '../data/notes_scope.dart';
 import '../models/note.dart';
@@ -10,7 +13,6 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/date_keys.dart';
 import '../utils/khmer_text.dart';
-import '../utils/markdown_controller.dart';
 import '../widgets/glass.dart';
 import '../widgets/month_year_picker.dart';
 import '../widgets/sheets.dart';
@@ -30,16 +32,24 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
+  /// Months are immutable once computed, so they are cached rather than
+  /// recomputed every time the user steps between them.
+  final KhmerMonthCache _months = KhmerMonthCache();
+
   late DateTime _month;
   late DateTime _selected;
+  late KhmerMonth _data;
 
-  /// Per-month derived data, recomputed only when the month changes.
-  List<DateTime> _days = const <DateTime>[];
-  Map<String, KhLunarDate> _lunar = const <String, KhLunarDate>{};
-  Set<String> _holyDays = const <String>{};
-  Map<String, List<KhmerHoliday>> _holidays =
-      const <String, List<KhmerHoliday>>{};
-  String? _error;
+  /// Which direction the last month change moved, so the grid slides the
+  /// way the user pushed it.
+  int _direction = 1;
+
+  // Derived from the note list. The controller notifies on every edit,
+  // including ones made on the other tab, and this screen stays alive inside
+  // the shell's IndexedStack — so these are rebuilt only when the underlying
+  // list actually changes identity, not on every notification.
+  List<Note>? _notesSource;
+  Set<String> _daysWithNotes = const <String>{};
 
   @override
   void initState() {
@@ -47,51 +57,27 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final DateTime now = DateTime.now();
     _month = DateTime(now.year, now.month);
     _selected = dayOnly(now);
-    _recompute();
+    _data = _months.monthFor(_month);
+    _warmNeighbours();
   }
 
-  /// The 42 cells of a six-week, Sunday-first grid covering [_month].
-  List<DateTime> _gridDays() {
-    final DateTime first = DateTime(_month.year, _month.month);
-    // DateTime.weekday is 1 = Monday … 7 = Sunday; % 7 puts Sunday in column 0.
-    final DateTime start = first.subtract(Duration(days: first.weekday % 7));
-    return List<DateTime>.generate(
-      42,
-      (int i) => DateTime(start.year, start.month, start.day + i),
-    );
+  /// Computes the adjacent months off the critical path so a swipe or an
+  /// arrow tap lands on a grid that is already built.
+  void _warmNeighbours() {
+    final DateTime target = _month;
+    scheduleMicrotask(() {
+      if (!mounted || target != _month) return;
+      _months.precache(target);
+    });
   }
 
-  void _recompute() {
-    final List<DateTime> days = _gridDays();
-
-    try {
-      final Map<String, KhLunarDate> lunar = <String, KhLunarDate>{};
-      final Set<String> holy = <String>{};
-      for (final DateTime day in days) {
-        final DateTime utc = dayOnlyUtc(day);
-        lunar[dateKey(day)] = findLunarDate(utc);
-        if (isBuddhistHolyDay(utc)) holy.add(dateKey(day));
-      }
-
-      final Map<String, List<KhmerHoliday>> holidays =
-          <String, List<KhmerHoliday>>{};
-      for (final DateTime day in days) {
-        final List<KhmerHoliday> found = holidaysOn(day);
-        if (found.isNotEmpty) holidays[dateKey(day)] = found;
-      }
-
-      _days = days;
-      _lunar = lunar;
-      _holyDays = holy;
-      _holidays = holidays;
-      _error = null;
-    } on Object catch (error) {
-      _days = days;
-      _lunar = const <String, KhLunarDate>{};
-      _holyDays = const <String>{};
-      _holidays = const <String, List<KhmerHoliday>>{};
-      _error = '$error';
-    }
+  void _refreshNoteIndex(NotesController notes) {
+    final List<Note> source = notes.activeNotes;
+    if (identical(source, _notesSource)) return;
+    _notesSource = source;
+    _daysWithNotes = <String>{
+      for (final Note note in source) dateKey(note.createdAt),
+    };
   }
 
   /// Moves the selection into [month], keeping the same day number where the
@@ -102,33 +88,48 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return DateTime(month.year, month.month, _selected.day.clamp(1, lastDay));
   }
 
+  void _showMonth(DateTime month, {required int direction, DateTime? select}) {
+    setState(() {
+      _direction = direction;
+      _month = DateTime(month.year, month.month);
+      _data = _months.monthFor(_month);
+      _selected = select ?? _carrySelectionInto(_month);
+    });
+    _warmNeighbours();
+  }
+
   void _shiftMonth(int delta) {
     HapticFeedback.selectionClick();
-    setState(() {
-      _month = DateTime(_month.year, _month.month + delta);
-      _selected = _carrySelectionInto(_month);
-      _recompute();
-    });
+    _showMonth(
+      DateTime(_month.year, _month.month + delta),
+      direction: delta.isNegative ? -1 : 1,
+    );
   }
 
   void _select(DateTime day) {
     HapticFeedback.selectionClick();
-    setState(() {
-      _selected = dayOnly(day);
-      if (day.month != _month.month || day.year != _month.year) {
-        _month = DateTime(day.year, day.month);
-        _recompute();
-      }
-    });
+    final DateTime picked = dayOnly(day);
+    if (picked.month != _month.month || picked.year != _month.year) {
+      // Tapping a trailing or leading cell moves the whole grid with it.
+      _showMonth(
+        DateTime(picked.year, picked.month),
+        direction: picked.isBefore(_month) ? -1 : 1,
+        select: picked,
+      );
+      return;
+    }
+    setState(() => _selected = picked);
   }
 
   void _goToday() {
+    HapticFeedback.selectionClick();
     final DateTime now = DateTime.now();
-    setState(() {
-      _month = DateTime(now.year, now.month);
-      _selected = dayOnly(now);
-      _recompute();
-    });
+    final DateTime today = dayOnly(now);
+    _showMonth(
+      DateTime(now.year, now.month),
+      direction: today.isBefore(_month) ? -1 : 1,
+      select: today,
+    );
   }
 
   /// Jump straight to any month/year rather than stepping one at a time.
@@ -138,21 +139,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
       builder: (BuildContext context) => MonthYearPicker(initial: _month),
     );
     if (chosen == null || !mounted) return;
-
-    setState(() {
-      _month = chosen;
-      _selected = _carrySelectionInto(chosen);
-      _recompute();
-    });
+    _showMonth(chosen, direction: chosen.isBefore(_month) ? -1 : 1);
   }
 
   @override
   Widget build(BuildContext context) {
     final NotesController notes = NotesScope.of(context);
-
-    final Set<String> daysWithNotes = <String>{
-      for (final Note note in notes.activeNotes) dateKey(note.createdAt),
-    };
+    _refreshNoteIndex(notes);
 
     final List<Note> notesOnSelected =
         notes.activeNotes
@@ -161,7 +154,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ..sort((Note a, Note b) => b.updatedAt.compareTo(a.updatedAt));
 
     final DateTime selectedUtc = dayOnlyUtc(_selected);
-    final bool computed = _error == null;
+    final String selectedKey = dateKey(_selected);
+    final bool computed = _data.computed;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -178,29 +172,31 @@ class _CalendarScreenState extends State<CalendarScreen> {
               onPickMonth: _pickMonth,
             ),
             const SizedBox(height: 16),
-            if (_error != null) ...<Widget>[
-              _ErrorBanner(message: _error!),
+            if (_data.error != null) ...<Widget>[
+              _ErrorBanner(message: _data.error!),
               const SizedBox(height: 14),
             ],
             const _WeekdayRow(),
             const SizedBox(height: 6),
-            _MonthGrid(
-              days: _days,
+            _SwipeableMonth(
               month: _month,
-              selected: _selected,
-              lunar: _lunar,
-              holyDays: _holyDays,
-              holidays: _holidays,
-              daysWithNotes: daysWithNotes,
-              onSelect: _select,
+              direction: _direction,
+              onSwipe: _shiftMonth,
+              child: _MonthGrid(
+                key: ValueKey<String>('${_month.year}-${_month.month}'),
+                data: _data,
+                selected: _selected,
+                daysWithNotes: _daysWithNotes,
+                onSelect: _select,
+              ),
             ),
             const SizedBox(height: 20),
             _DayDetailPanel(
               date: _selected,
-              lunar: _lunar[dateKey(_selected)],
+              lunar: _data.lunar[selectedKey],
               formatted: computed ? formatKhmerDate(selectedUtc) : null,
-              isHolyDay: _holyDays.contains(dateKey(_selected)),
-              holidays: _holidays[dateKey(_selected)] ?? const <KhmerHoliday>[],
+              isHolyDay: _data.holyDays.contains(selectedKey),
+              holidays: _data.holidaysOnKey(selectedKey),
               notes: notesOnSelected,
               onOpenNote: _openNote,
               onNewNote: isSameDay(_selected, DateTime.now())
@@ -226,6 +222,70 @@ class _CalendarScreenState extends State<CalendarScreen> {
       MaterialPageRoute<void>(
         builder: (BuildContext context) =>
             EditorScreen(initial: notes.draft(), autofocusBody: true),
+      ),
+    );
+  }
+}
+
+/// Wraps the grid in a horizontal fling gesture and slides between months.
+///
+/// Stepping a calendar with only the two chevrons is unusual on a phone;
+/// swiping is what people reach for first.
+class _SwipeableMonth extends StatelessWidget {
+  const _SwipeableMonth({
+    required this.month,
+    required this.direction,
+    required this.onSwipe,
+    required this.child,
+  });
+
+  /// Velocity past which a drag counts as a month change, in logical pixels
+  /// per second. Low enough to feel responsive, high enough that a vertical
+  /// scroll with a little sideways drift does not trigger it.
+  static const double _flingThreshold = 220;
+
+  final DateTime month;
+  final int direction;
+  final ValueChanged<int> onSwipe;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      // Only claims horizontal drags, so the surrounding vertical ListView
+      // keeps working normally.
+      onHorizontalDragEnd: (DragEndDetails details) {
+        final double velocity = details.primaryVelocity ?? 0;
+        if (velocity.abs() < _flingThreshold) return;
+        // Dragging right (positive velocity) reveals the previous month.
+        onSwipe(velocity > 0 ? -1 : 1);
+      },
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        // Outgoing and incoming grids are the same size, so they can share the
+        // slot instead of resizing it mid-transition.
+        layoutBuilder: (Widget? current, List<Widget> previous) => Stack(
+          alignment: Alignment.topCenter,
+          children: <Widget>[...previous, ?current],
+        ),
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          final bool incoming =
+              child.key == ValueKey<String>('${month.year}-${month.month}');
+          final double from = incoming ? direction * 0.12 : direction * -0.12;
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: Offset(from, 0),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          );
+        },
+        child: child,
       ),
     );
   }
@@ -257,58 +317,63 @@ class _MonthHeader extends StatelessWidget {
     return Row(
       children: <Widget>[
         Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onPickMonth,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Flexible(
-                      child: ShaderMask(
-                        shaderCallback: (Rect bounds) =>
-                            AppColors.primaryGradient.createShader(bounds),
-                        blendMode: BlendMode.srcIn,
-                        child: Text(
-                          '${gregorianMonthName(month.month)} ${toKhmerDigits(month.year)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.headlineMedium?.copyWith(
-                            color: Colors.white,
+          child: Semantics(
+            button: true,
+            label: 'Change month, currently ${_englishMonth(month)}',
+            excludeSemantics: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onPickMonth,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Flexible(
+                        child: ShaderMask(
+                          shaderCallback: (Rect bounds) =>
+                              AppColors.primaryGradient.createShader(bounds),
+                          blendMode: BlendMode.srcIn,
+                          child: Text(
+                            '${gregorianMonthName(month.month)} ${toKhmerDigits(month.year)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.headlineMedium?.copyWith(
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.expand_more_rounded,
-                      size: 20,
-                      color: AppColors.textMid,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                // One rich text rather than a Row: a Row of fixed-width Texts
-                // cannot shrink and overflows on narrow phones.
-                Text.rich(
-                  TextSpan(
-                    children: <InlineSpan>[
-                      TextSpan(text: _englishMonth(month)),
-                      if (beYear != null) ...<InlineSpan>[
-                        const TextSpan(text: '  ·  '),
-                        TextSpan(
-                          text: 'ពុទ្ធសករាជ ${toKhmerDigits(beYear!)}',
-                          style: const TextStyle(color: AppColors.cyan),
-                        ),
-                      ],
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.expand_more_rounded,
+                        size: 20,
+                        color: AppColors.textMid,
+                      ),
                     ],
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.labelSmall?.copyWith(color: AppColors.textLow),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  // One rich text rather than a Row: a Row of fixed-width Texts
+                  // cannot shrink and overflows on narrow phones.
+                  Text.rich(
+                    TextSpan(
+                      children: <InlineSpan>[
+                        TextSpan(text: _englishMonth(month)),
+                        if (beYear != null) ...<InlineSpan>[
+                          const TextSpan(text: '  ·  '),
+                          TextSpan(
+                            text: 'ពុទ្ធសករាជ ${toKhmerDigits(beYear!)}',
+                            style: const TextStyle(color: AppColors.cyan),
+                          ),
+                        ],
+                      ],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.labelSmall?.copyWith(color: AppColors.textLow),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -381,61 +446,50 @@ class _WeekdayRow extends StatelessWidget {
 
 class _MonthGrid extends StatelessWidget {
   const _MonthGrid({
-    required this.days,
-    required this.month,
+    super.key,
+    required this.data,
     required this.selected,
-    required this.lunar,
-    required this.holyDays,
-    required this.holidays,
     required this.daysWithNotes,
     required this.onSelect,
   });
 
-  final List<DateTime> days;
-  final DateTime month;
+  final KhmerMonth data;
   final DateTime selected;
-  final Map<String, KhLunarDate> lunar;
-  final Set<String> holyDays;
-  final Map<String, List<KhmerHoliday>> holidays;
   final Set<String> daysWithNotes;
   final ValueChanged<DateTime> onSelect;
 
   @override
   Widget build(BuildContext context) {
+    final List<DateTime> days = data.days;
     if (days.isEmpty) return const SizedBox.shrink();
     final DateTime today = dayOnly(DateTime.now());
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         for (int week = 0; week < 6; week++)
           Row(
             children: <Widget>[
               for (int weekday = 0; weekday < 7; weekday++)
-                Builder(
-                  builder: (BuildContext context) {
-                    final DateTime day = days[week * 7 + weekday];
-                    final String key = dateKey(day);
-                    return Expanded(
-                      child: _DayCell(
-                        date: day,
-                        lunar: lunar[key],
-                        inMonth: day.month == month.month,
-                        isToday: isSameDay(day, today),
-                        isSelected: isSameDay(day, selected),
-                        isHolyDay: holyDays.contains(key),
-                        isPublicHoliday:
-                            (holidays[key] ?? const <KhmerHoliday>[]).any(
-                              (KhmerHoliday h) => h.isPublicHoliday,
-                            ),
-                        hasNote: daysWithNotes.contains(key),
-                        onTap: () => onSelect(day),
-                      ),
-                    );
-                  },
-                ),
+                Expanded(child: _buildCell(days[week * 7 + weekday], today)),
             ],
           ),
       ],
+    );
+  }
+
+  Widget _buildCell(DateTime day, DateTime today) {
+    final String key = dateKey(day);
+    return _DayCell(
+      date: day,
+      lunar: data.lunar[key],
+      inMonth: day.month == data.month.month && day.year == data.month.year,
+      isToday: isSameDay(day, today),
+      isSelected: isSameDay(day, selected),
+      isHolyDay: data.holyDays.contains(key),
+      holidays: data.holidaysOnKey(key),
+      hasNote: daysWithNotes.contains(key),
+      onTap: () => onSelect(day),
     );
   }
 }
@@ -448,7 +502,7 @@ class _DayCell extends StatelessWidget {
     required this.isToday,
     required this.isSelected,
     required this.isHolyDay,
-    required this.isPublicHoliday,
+    required this.holidays,
     required this.hasNote,
     required this.onTap,
   });
@@ -459,14 +513,41 @@ class _DayCell extends StatelessWidget {
   final bool isToday;
   final bool isSelected;
   final bool isHolyDay;
-  final bool isPublicHoliday;
+  final List<KhmerHoliday> holidays;
   final bool hasNote;
   final VoidCallback onTap;
+
+  bool get _isPublicHoliday =>
+      holidays.any((KhmerHoliday h) => h.isPublicHoliday);
+
+  /// What a screen reader reads for this cell.
+  ///
+  /// Without this the whole grid announces as a wall of bare numbers, with no
+  /// way to tell a holiday or the selected day from any other.
+  String get _semanticLabel {
+    final StringBuffer buffer = StringBuffer()
+      ..write('${date.day} ${gregorianMonthName(date.month)} ${date.year}');
+    if (isToday) buffer.write(', today');
+    final KhLunarDate? moon = lunar;
+    if (moon != null) {
+      buffer.write(
+        ', ${lunarDayToken(moon.day)} ខែ${lunarMonthName(moon.month)}',
+      );
+    }
+    if (isHolyDay) buffer.write(', ថ្ងៃសីល');
+    for (final KhmerHoliday holiday in holidays) {
+      buffer.write(', ${holiday.english}');
+      if (holiday.isPublicHoliday) buffer.write(' public holiday');
+    }
+    if (hasNote) buffer.write(', has notes');
+    return buffer.toString();
+  }
 
   @override
   Widget build(BuildContext context) {
     final TextTheme text = Theme.of(context).textTheme;
     final bool isSunday = date.weekday == DateTime.sunday;
+    final bool isPublicHoliday = _isPublicHoliday;
 
     final Color accent = isPublicHoliday
         ? AppColors.pink
@@ -476,96 +557,102 @@ class _DayCell extends StatelessWidget {
         ? AppColors.textHigh.withValues(alpha: 0.20)
         : (isSunday ? AppColors.pink : AppColors.textHigh);
 
-    return Padding(
-      padding: const EdgeInsets.all(2.5),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: AspectRatio(
-          aspectRatio: 0.82,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            decoration: BoxDecoration(
-              gradient: isToday
-                  ? LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: <Color>[
-                        AppColors.violet.withValues(alpha: 0.34),
-                        AppColors.cyan.withValues(alpha: 0.18),
-                      ],
-                    )
-                  : null,
-              color: isToday
-                  ? null
-                  : (isSelected
-                        ? accent.withValues(alpha: 0.13)
-                        : Colors.white.withValues(
-                            alpha: inMonth ? 0.035 : 0.012,
-                          )),
-              borderRadius: BorderRadius.circular(13),
-              border: Border.all(
-                color: isSelected
-                    ? accent.withValues(alpha: 0.75)
-                    : (isToday
-                          ? AppColors.violet.withValues(alpha: 0.55)
-                          : AppColors.glassBorder),
-                width: isSelected ? 1.6 : 1,
-              ),
-              boxShadow: isSelected || isToday
-                  ? <BoxShadow>[
-                      BoxShadow(
-                        color: accent.withValues(alpha: 0.28),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Text(
-                  '${date.day}',
-                  style: text.titleMedium?.copyWith(
-                    color: dayColor,
-                    fontSize: 15.5,
-                    fontWeight: isToday ? FontWeight.w700 : FontWeight.w600,
-                  ),
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: _semanticLabel,
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.all(2.5),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: AspectRatio(
+            aspectRatio: 0.82,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              decoration: BoxDecoration(
+                gradient: isToday
+                    ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: <Color>[
+                          AppColors.violet.withValues(alpha: 0.34),
+                          AppColors.cyan.withValues(alpha: 0.18),
+                        ],
+                      )
+                    : null,
+                color: isToday
+                    ? null
+                    : (isSelected
+                          ? accent.withValues(alpha: 0.13)
+                          : Colors.white.withValues(
+                              alpha: inMonth ? 0.035 : 0.012,
+                            )),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(
+                  color: isSelected
+                      ? accent.withValues(alpha: 0.75)
+                      : (isToday
+                            ? AppColors.violet.withValues(alpha: 0.55)
+                            : AppColors.glassBorder),
+                  width: isSelected ? 1.6 : 1,
                 ),
-                const SizedBox(height: 1),
-                SizedBox(
-                  height: 13,
-                  child: lunar == null
-                      ? const SizedBox.shrink()
-                      : Text(
-                          lunarDayToken(lunar!.day),
-                          maxLines: 1,
-                          overflow: TextOverflow.clip,
-                          style: text.labelSmall?.copyWith(
-                            fontSize: 9.5,
-                            height: 1.1,
-                            color: !inMonth
-                                ? AppColors.textHigh.withValues(alpha: 0.16)
-                                : (isHolyDay
-                                      ? AppColors.amber
-                                      : AppColors.textMid),
-                          ),
+                boxShadow: isSelected || isToday
+                    ? <BoxShadow>[
+                        BoxShadow(
+                          color: accent.withValues(alpha: 0.28),
+                          blurRadius: 14,
+                          offset: const Offset(0, 4),
                         ),
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    if (isHolyDay && inMonth)
-                      const _Dot(color: AppColors.amber),
-                    if (isPublicHoliday && inMonth)
-                      const _Dot(color: AppColors.pink),
-                    if (hasNote && inMonth) const _Dot(color: AppColors.lime),
-                  ],
-                ),
-              ],
+                      ]
+                    : null,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Text(
+                    '${date.day}',
+                    style: text.titleMedium?.copyWith(
+                      color: dayColor,
+                      fontSize: 15.5,
+                      fontWeight: isToday ? FontWeight.w700 : FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  SizedBox(
+                    height: 13,
+                    child: lunar == null
+                        ? const SizedBox.shrink()
+                        : Text(
+                            lunarDayToken(lunar!.day),
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            style: text.labelSmall?.copyWith(
+                              fontSize: 9.5,
+                              height: 1.1,
+                              color: !inMonth
+                                  ? AppColors.textHigh.withValues(alpha: 0.16)
+                                  : (isHolyDay
+                                        ? AppColors.amber
+                                        : AppColors.textMid),
+                            ),
+                          ),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      if (isHolyDay && inMonth)
+                        const _Dot(color: AppColors.amber),
+                      if (isPublicHoliday && inMonth)
+                        const _Dot(color: AppColors.pink),
+                      if (hasNote && inMonth) const _Dot(color: AppColors.lime),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -721,70 +808,85 @@ class _DayDetailPanel extends StatelessWidget {
           if (notes.isNotEmpty) ...<Widget>[
             const SizedBox(height: 10),
             for (final Note note in notes)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+              Semantics(
+                button: true,
+                label: note.title.trim().isEmpty
+                    ? 'Open untitled note'
+                    : 'Open ${note.title.trim()}',
+                excludeSemantics: true,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => onOpenNote(note),
-                  child: Row(
-                    children: <Widget>[
-                      Container(
-                        width: 3,
-                        height: 26,
-                        margin: const EdgeInsets.only(right: 10),
-                        decoration: BoxDecoration(
-                          color: AppColors.accentAt(note.accent),
-                          borderRadius: BorderRadius.circular(2),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: <Widget>[
+                        Container(
+                          width: 3,
+                          height: 26,
+                          margin: const EdgeInsets.only(right: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentAt(note.accent),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              note.title.trim().isEmpty
-                                  ? 'Untitled'
-                                  : note.title.trim(),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: text.titleSmall,
-                            ),
-                            if (note.preview.isNotEmpty)
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
                               Text(
-                                stripMarkdown(note.preview),
+                                note.title.trim().isEmpty
+                                    ? 'Untitled'
+                                    : note.title.trim(),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: text.labelSmall?.copyWith(
-                                  color: AppColors.textLow,
-                                ),
+                                style: text.titleSmall,
                               ),
-                          ],
+                              if (note.plainPreview.isNotEmpty)
+                                Text(
+                                  note.plainPreview,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: text.labelSmall?.copyWith(
+                                    color: AppColors.textLow,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        size: 18,
-                        color: AppColors.textLow,
-                      ),
-                    ],
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 18,
+                          color: AppColors.textLow,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
           ],
           if (onNewNote != null) ...<Widget>[
             const SizedBox(height: 6),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onNewNote,
-              child: Row(
-                children: <Widget>[
-                  Icon(Icons.add_rounded, size: 17, color: AppColors.cyan),
-                  const SizedBox(width: 8),
-                  Text(
-                    'New note for today',
-                    style: text.bodyMedium?.copyWith(color: AppColors.cyan),
+            Semantics(
+              button: true,
+              label: 'New note for today',
+              excludeSemantics: true,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onNewNote,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(Icons.add_rounded, size: 17, color: AppColors.cyan),
+                      const SizedBox(width: 8),
+                      Text(
+                        'New note for today',
+                        style: text.bodyMedium?.copyWith(color: AppColors.cyan),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ],

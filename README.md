@@ -15,15 +15,43 @@ live markdown editor.
   archiving is a sideways swipe with undo.
 - **Search** — matches titles, body text, tags and checklist items.
 - **Khmer lunar calendar** — a month grid showing each day's lunar date (កើត / រោច), Buddhist holy
-  days, Khmer New Year, and which days already have notes. Computed on-device. See below.
+  days, Khmer New Year, and which days already have notes. Swipe sideways to change month. Computed
+  on-device. See below.
 - **Fully offline** — notes are stored on the device and the calendar is computed locally. No
   account, no server, no network calls at all.
+- **Accessible** — every control has a screen-reader label and a 44–48dp touch target, calendar
+  cells announce their full date and lunar day, and the app honours the platform's reduce-motion
+  setting.
 
 ## Design
 
-Dark aurora background (animated neon blobs painted on a canvas), frosted-glass panels via
-`BackdropFilter`, six selectable per-note accent colours, and spring-loaded micro-interactions.
-The type scale uses the platform system face (SF Pro / Roboto), so nothing is fetched at runtime.
+Dark aurora background (animated neon blobs painted on a canvas), frosted-glass panels, six
+selectable per-note accent colours, and spring-loaded micro-interactions. The type scale uses the
+platform system face (SF Pro / Roboto), so nothing is fetched at runtime.
+
+The app is dark-only: `themeMode` is pinned, and both launch screens use `AppColors.bg` so there is
+no white flash on a light-mode device.
+
+### Where the frames go
+
+A few deliberate choices, because this is the kind of UI that gets slow quietly:
+
+- **Blur is rationed.** `BackdropFilter` costs a `saveLayer` plus a gaussian pass over the pixels
+  behind it, per panel, per frame. The chrome that sits over scrolling content — nav bar, sheets,
+  search field, toolbar — pays it. Note cards do not (`GlassPanel(blurred: false)`): dozens are on
+  screen at once, and what is behind them is the aurora, an already-smooth gradient, so blurring it
+  returns very nearly the same pixels.
+- **The grid is lazy.** Notes are chunked into a `SliverList` rather than built all at once, so
+  build cost tracks the viewport, not the library size. Each card is a `RepaintBoundary`.
+- **Derived state is computed once per change, not once per build.** `visibleNotes`, `allTags`,
+  `allFolders` and the counts are cached on `NotesController` and invalidated on mutation; a note's
+  stripped-markdown preview and its folded-case search index are cached on the immutable `Note`.
+- **Typing does not rebuild the editor.** A `TextField` already owns its text, so title, body and
+  checklist edits update the model without `setState`; structural edits still rebuild.
+- **The calendar caches months.** `KhmerMonthCache` is a small LRU, with the neighbouring months
+  warmed in a microtask so an arrow tap or a swipe lands on a grid that already exists.
+- **The aurora stops when asked.** It respects reduce-motion, and instances share a phase so the
+  background does not jump when the editor fades in over the list.
 
 ## Khmer calendar
 
@@ -108,12 +136,14 @@ Run `flutter doctor` to confirm what's missing.
 flutter test
 ```
 
-32 tests cover the notes controller (sorting, filtering, search, archive, undo), JSON persistence
-round-trips, the markdown helpers, the Khmer lunar algorithm (see the table above), and widget
-smoke tests for boot / open / search / calendar.
+98 tests cover the notes controller (sorting, filtering, search, archive, undo, cache invalidation,
+save durability), JSON persistence round-trips, the markdown helpers, the `Note` derived-state
+caches, the Khmer lunar algorithm (see the table above), the month cache and its LRU eviction, and
+widget tests for boot / open / search / calendar / month swipe / the expanding FAB / reduce-motion.
 
 > The aurora background animates continuously, so widget tests advance frames with
-> `tester.pump(duration)` — `pumpAndSettle` would never return.
+> `tester.pump(duration)` — `pumpAndSettle` would never return. The one exception is the
+> reduce-motion test, which asserts exactly that: with animations disabled the tree settles.
 
 ## Layout
 
@@ -124,9 +154,10 @@ lib/
   models/note.dart              Note, ChecklistItem, NoteKind
   data/
     note_store.dart             NoteStore interface, SharedPreferences + in-memory impls
-    notes_controller.dart       ChangeNotifier: CRUD, search, filters, debounced saves
+    notes_controller.dart       ChangeNotifier: CRUD, search, filters, cached projections
     notes_scope.dart            InheritedNotifier wiring
     khmer_lunar.dart            the lunar calendar algorithm (pure Dart, no deps)
+    khmer_month.dart            one month's computed grid, plus an LRU cache
   screens/
     home_screen.dart            grid, search, filters, expanding FAB
     editor_screen.dart          title/body/checklist editing, options sheets
@@ -134,6 +165,7 @@ lib/
   theme/                        colours + ThemeData
   utils/
     markdown_controller.dart    live-styling TextEditingController + toolbar helpers
+    markdown_text.dart          stripMarkdown, Flutter-free so models can use it
     khmer_text.dart             Khmer numerals, month/weekday/animal/era names
     date_keys.dart, relative_time.dart
   widgets/                      glass panels, aurora background, cards, sheets, nav bar
@@ -144,3 +176,13 @@ lib/
 Notes persist as a single JSON blob through `shared_preferences`, chosen because it works
 identically on mobile **and** web. Persistence sits behind the `NoteStore` interface, so swapping in
 SQLite (`sqflite`), Isar, or a sync backend means writing one class — no UI changes.
+
+Writes are debounced by 350ms to coalesce bursts of edits. Because both mobile platforms can kill a
+backgrounded process without further warning, an `AppLifecycleListener` flushes anything still
+pending on inactive/pause/hide/detach, and `dispose` writes rather than cancelling — otherwise an
+edit made in the last third of a second before backgrounding would simply be gone.
+
+## Shipping
+
+See [STORE_CHECKLIST.md](STORE_CHECKLIST.md) for the App Store and Play Store checklist: what is
+already configured in the repo, and what still needs your accounts and manual decisions.

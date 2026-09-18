@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
+export 'markdown_text.dart' show stripMarkdown;
+
 /// A [TextEditingController] that styles markdown **while you type** —
 /// live preview in the same field, so bold looks bold as you write it.
 ///
@@ -204,23 +206,6 @@ class MarkdownEditingController extends TextEditingController {
     return spans;
   }
 }
-
-/// Removes markdown syntax so card previews read as clean prose.
-String stripMarkdown(String source) {
-  return source
-      .replaceAll(RegExp(r'^\s*#{1,6}\s*', multiLine: true), '')
-      .replaceAll(RegExp(r'^\s*>\s?', multiLine: true), '')
-      .replaceAll(RegExp(r'^\s*-\s\[[ xX]\]\s*', multiLine: true), '')
-      .replaceAll(RegExp(r'^\s*[-*]\s+', multiLine: true), '• ')
-      // `replaceAll` does not expand capture groups — these must be mapped.
-      .replaceAllMapped(RegExp(r'\*\*([^*\n]+)\*\*'), _group1)
-      .replaceAllMapped(RegExp(r'\*([^*\n]+)\*'), _group1)
-      .replaceAllMapped(RegExp(r'~~([^~\n]+)~~'), _group1)
-      .replaceAllMapped(RegExp(r'`([^`\n]+)`'), _group1)
-      .trim();
-}
-
-String _group1(Match match) => match.group(1) ?? '';
 
 /// Text-editing helpers used by the formatting toolbar.
 extension MarkdownEditing on TextEditingController {

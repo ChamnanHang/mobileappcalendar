@@ -69,6 +69,7 @@ class AdBanner extends StatefulWidget {
 class _AdBannerState extends State<AdBanner> {
   BannerAd? _ad;
   bool _loaded = false;
+  bool _disposed = false;
 
   @override
   void initState() {
@@ -95,22 +96,35 @@ class _AdBannerState extends State<AdBanner> {
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (_) {
-          if (mounted) setState(() => _loaded = true);
+          if (!mounted) return;
+          setState(() => _loaded = true);
         },
-        onAdFailedToLoad: (Ad ad, LoadAdError error) {
-          ad.dispose();
+        onAdFailedToLoad: (Ad failed, LoadAdError error) {
+          // Clear the field first: the listener disposes the ad here, and
+          // leaving `_ad` pointing at it meant `dispose` disposed it a second
+          // time.
+          if (identical(failed, _ad)) _ad = null;
+          failed.dispose();
           debugPrint('Banner failed to load: $error');
         },
       ),
     );
 
+    // The widget can be disposed while `getLargeAnchored…` or `load` is in
+    // flight, which would otherwise leak the ad.
+    if (_disposed) {
+      await ad.dispose();
+      return;
+    }
     _ad = ad;
     await ad.load();
   }
 
   @override
   void dispose() {
+    _disposed = true;
     _ad?.dispose();
+    _ad = null;
     super.dispose();
   }
 

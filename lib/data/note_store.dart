@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/note.dart';
@@ -31,19 +32,36 @@ class PrefsNoteStore implements NoteStore {
           .whereType<Map<String, dynamic>>()
           .map(Note.fromJson)
           .toList();
-    } on FormatException {
-      // Corrupted payload — start clean rather than crash on launch.
+    } on Object catch (error, stack) {
+      // A corrupted or partially-written payload must never stop the app from
+      // launching. `FormatException` is only the common case: a truncated blob
+      // can also surface as a cast error out of `Note.fromJson`, so this
+      // catches everything and starts clean instead.
+      debugPrint('Could not read stored notes, starting empty: $error');
+      assert(() {
+        debugPrintStack(stackTrace: stack);
+        return true;
+      }());
       return <Note>[];
     }
   }
 
   @override
   Future<void> save(List<Note> notes) async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    // Encode before awaiting anything: the caller may keep mutating the list
+    // (a checklist tick while a save is in flight), and a snapshot taken after
+    // the await could capture a half-applied edit.
     final String raw = jsonEncode(
       notes.map((Note n) => n.toJson()).toList(growable: false),
     );
-    await prefs.setString(key, raw);
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, raw);
+    } on Object catch (error) {
+      // Losing one write is recoverable; an unhandled async error inside a
+      // lifecycle callback is not.
+      debugPrint('Could not save notes: $error');
+    }
   }
 }
 
@@ -53,9 +71,15 @@ class MemoryNoteStore implements NoteStore {
 
   List<Note> _notes;
 
+  /// How many times [save] has run — lets tests assert that a flush happened.
+  int saveCount = 0;
+
   @override
   Future<List<Note>> load() async => <Note>[..._notes];
 
   @override
-  Future<void> save(List<Note> notes) async => _notes = <Note>[...notes];
+  Future<void> save(List<Note> notes) async {
+    saveCount++;
+    _notes = <Note>[...notes];
+  }
 }

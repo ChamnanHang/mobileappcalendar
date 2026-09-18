@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import '../data/notes_controller.dart';
@@ -22,9 +23,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _search = TextEditingController();
 
+  /// Owned here rather than inside the FAB so the scrim behind it — which
+  /// lives in the Scaffold body, not the FAB slot — can close it too.
+  final ValueNotifier<bool> _fabOpen = ValueNotifier<bool>(false);
+
   @override
   void dispose() {
     _search.dispose();
+    _fabOpen.dispose();
     super.dispose();
   }
 
@@ -163,80 +169,95 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: _ExpandingFab(
+        open: _fabOpen,
         onNewNote: () => _create(NoteKind.text),
         onNewChecklist: () => _create(NoteKind.checklist),
       ),
-      body: SafeArea(
-        child: notes.loading
-            ? const Center(
-                child: SizedBox(
-                  width: 26,
-                  height: 26,
-                  child: CircularProgressIndicator(strokeWidth: 2.2),
-                ),
-              )
-            : CustomScrollView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                slivers: <Widget>[
-                  SliverToBoxAdapter(
-                    child: _Header(count: visible.length, filter: notes.filter),
-                  ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 6, 18, 0),
-                      child: _SearchField(
-                        controller: _search,
-                        onChanged: notes.search,
-                        onClear: () {
-                          _search.clear();
-                          notes.search('');
-                        },
-                      ),
-                    ),
-                  ),
-                  SliverToBoxAdapter(child: _FilterBar(notes: notes)),
-                  if (notes.allFolders.isNotEmpty)
-                    SliverToBoxAdapter(child: _FolderBar(notes: notes)),
-                  if (notes.allTags.isNotEmpty)
-                    SliverToBoxAdapter(child: _TagBar(notes: notes)),
-                  if (visible.isEmpty)
-                    SliverToBoxAdapter(child: _emptyFor(notes))
-                  else ...<Widget>[
-                    if (pinned.isNotEmpty) ...<Widget>[
-                      const SliverToBoxAdapter(
-                        child: _SectionLabel(
-                          label: 'Pinned',
-                          icon: Icons.push_pin_rounded,
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: _MasonryGrid(
-                          notes: pinned,
-                          columns: columns,
-                          buildCard: _card,
-                        ),
-                      ),
-                    ],
-                    if (rest.isNotEmpty) ...<Widget>[
-                      if (pinned.isNotEmpty)
-                        const SliverToBoxAdapter(
-                          child: _SectionLabel(label: 'Notes'),
-                        ),
-                      SliverToBoxAdapter(
-                        child: _MasonryGrid(
-                          notes: rest,
-                          columns: columns,
-                          buildCard: _card,
-                        ),
-                      ),
-                    ],
-                  ],
-                  const SliverToBoxAdapter(child: SizedBox(height: 110)),
-                ],
-              ),
+      body: Stack(
+        children: <Widget>[
+          SafeArea(
+            child: _buildList(context, notes, visible, pinned, rest, columns),
+          ),
+          // Tapping anywhere outside the expanded FAB dismisses it, which is
+          // what every other app with this pattern does.
+          _FabScrim(open: _fabOpen),
+        ],
       ),
     );
+  }
+
+  Widget _buildList(
+    BuildContext context,
+    NotesController notes,
+    List<Note> visible,
+    List<Note> pinned,
+    List<Note> rest,
+    int columns,
+  ) {
+    return notes.loading
+        ? const Center(
+            child: SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(strokeWidth: 2.2),
+            ),
+          )
+        : CustomScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: <Widget>[
+              SliverToBoxAdapter(
+                child: _Header(count: visible.length, filter: notes.filter),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 6, 18, 0),
+                  child: _SearchField(
+                    controller: _search,
+                    onChanged: notes.searchAsYouType,
+                    onSubmitted: notes.commitSearch,
+                    onClear: () {
+                      _search.clear();
+                      notes.search('');
+                    },
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(child: _FilterBar(notes: notes)),
+              if (notes.allFolders.isNotEmpty)
+                SliverToBoxAdapter(child: _FolderBar(notes: notes)),
+              if (notes.allTags.isNotEmpty)
+                SliverToBoxAdapter(child: _TagBar(notes: notes)),
+              if (visible.isEmpty)
+                SliverToBoxAdapter(child: _emptyFor(notes))
+              else ...<Widget>[
+                if (pinned.isNotEmpty) ...<Widget>[
+                  const SliverToBoxAdapter(
+                    child: _SectionLabel(
+                      label: 'Pinned',
+                      icon: Icons.push_pin_rounded,
+                    ),
+                  ),
+                  _MasonrySliver(
+                    notes: pinned,
+                    columns: columns,
+                    buildCard: _card,
+                  ),
+                ],
+                if (rest.isNotEmpty) ...<Widget>[
+                  if (pinned.isNotEmpty)
+                    const SliverToBoxAdapter(
+                      child: _SectionLabel(label: 'Notes'),
+                    ),
+                  _MasonrySliver(
+                    notes: rest,
+                    columns: columns,
+                    buildCard: _card,
+                  ),
+                ],
+              ],
+              const SliverToBoxAdapter(child: SizedBox(height: 110)),
+            ],
+          );
   }
 
   Widget _emptyFor(NotesController notes) {
@@ -278,6 +299,12 @@ class _HomeScreenState extends State<HomeScreen> {
       direction: note.archived
           ? DismissDirection.startToEnd
           : DismissDirection.endToStart,
+      // Swiping is not reachable with a screen reader or a switch device, so
+      // the same action is offered as a semantic gesture.
+      dismissThresholds: const <DismissDirection, double>{
+        DismissDirection.endToStart: 0.45,
+        DismissDirection.startToEnd: 0.45,
+      },
       background: _SwipeBackground(archived: note.archived),
       secondaryBackground: _SwipeBackground(archived: note.archived),
       onDismissed: (_) {
@@ -288,17 +315,33 @@ class _HomeScreenState extends State<HomeScreen> {
           _archiveWithUndo(note);
         }
       },
-      child: NoteCard(
-        note: note,
-        onTap: () => _openNote(note),
-        onLongPress: () => _quickActions(note),
-        onTogglePin: () => notes.togglePin(note.id),
-        onToggleFavorite: () {
-          HapticFeedback.selectionClick();
-          notes.toggleFavorite(note.id);
+      child: Semantics(
+        customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+          CustomSemanticsAction(
+            label: note.archived ? 'Restore' : 'Archive',
+          ): () {
+            if (note.archived) {
+              notes.setArchived(note.id, false);
+              _snack('Restored');
+            } else {
+              _archiveWithUndo(note);
+            }
+          },
+          const CustomSemanticsAction(label: 'More actions'): () =>
+              _quickActions(note),
         },
-        onToggleItem: (String itemId) =>
-            notes.toggleChecklistItem(note.id, itemId),
+        child: NoteCard(
+          note: note,
+          onTap: () => _openNote(note),
+          onLongPress: () => _quickActions(note),
+          onTogglePin: () => notes.togglePin(note.id),
+          onToggleFavorite: () {
+            HapticFeedback.selectionClick();
+            notes.toggleFavorite(note.id);
+          },
+          onToggleItem: (String itemId) =>
+              notes.toggleChecklistItem(note.id, itemId),
+        ),
       ),
     );
   }
@@ -378,11 +421,13 @@ class _SearchField extends StatelessWidget {
   const _SearchField({
     required this.controller,
     required this.onChanged,
+    required this.onSubmitted,
     required this.onClear,
   });
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
+  final VoidCallback onSubmitted;
   final VoidCallback onClear;
 
   @override
@@ -399,7 +444,10 @@ class _SearchField extends StatelessWidget {
             child: TextField(
               controller: controller,
               onChanged: onChanged,
+              // Typing is debounced; submitting should not wait it out.
+              onSubmitted: (_) => onSubmitted(),
               textInputAction: TextInputAction.search,
+              autocorrect: false,
               style: Theme.of(context).textTheme.bodyMedium,
               decoration: const InputDecoration(
                 hintText: 'Search notes, tags, tasks…',
@@ -410,12 +458,20 @@ class _SearchField extends StatelessWidget {
             valueListenable: controller,
             builder: (BuildContext context, TextEditingValue value, Widget? _) {
               if (value.text.isEmpty) return const SizedBox.shrink();
-              return GestureDetector(
-                onTap: onClear,
-                child: Icon(
-                  Icons.close_rounded,
-                  size: 17,
-                  color: AppColors.textMid,
+              return Semantics(
+                button: true,
+                label: 'Clear search',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onClear,
+                  child: TapTarget(
+                    size: 40,
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 17,
+                      color: AppColors.textMid,
+                    ),
+                  ),
                 ),
               );
             },
@@ -551,11 +607,12 @@ class _FolderBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 46,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
+    // A horizontally scrolling Row rather than a fixed-height ListView: the
+    // chips have to be free to grow when the system font size is turned up.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
+      child: Row(
         children: <Widget>[
           for (final String folder in notes.allFolders)
             Padding(
@@ -581,11 +638,10 @@ class _TagBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+      child: Row(
         children: <Widget>[
           for (final String tag in notes.allTags)
             Padding(
@@ -700,6 +756,50 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
+/// Lazy masonry.
+///
+/// The grid used to be one `SliverToBoxAdapter`, which meant every note was
+/// built and laid out whether or not it was anywhere near the viewport. Here
+/// the notes are cut into chunks of [_rowsPerChunk] rows and handed to a
+/// `SliverList`, so build cost tracks what is on screen rather than how many
+/// notes exist.
+///
+/// Each chunk staggers independently, so column heights re-align at a chunk
+/// boundary. With eight rows per chunk that seam is rare, and any list short
+/// enough to fit one chunk lays out exactly as it did before.
+class _MasonrySliver extends StatelessWidget {
+  const _MasonrySliver({
+    required this.notes,
+    required this.columns,
+    required this.buildCard,
+  });
+
+  static const int _rowsPerChunk = 8;
+
+  final List<Note> notes;
+  final int columns;
+  final Widget Function(Note) buildCard;
+
+  @override
+  Widget build(BuildContext context) {
+    final int chunkSize = columns * _rowsPerChunk;
+    final int chunks = (notes.length / chunkSize).ceil();
+
+    return SliverList.builder(
+      itemCount: chunks,
+      itemBuilder: (BuildContext context, int index) {
+        final int start = index * chunkSize;
+        final int end = (start + chunkSize).clamp(0, notes.length);
+        return _MasonryGrid(
+          notes: notes.sublist(start, end),
+          columns: columns,
+          buildCard: buildCard,
+        );
+      },
+    );
+  }
+}
+
 /// Simple masonry: notes are dealt round-robin into fixed columns, so cards of
 /// different heights stagger naturally without a third-party grid.
 class _MasonryGrid extends StatelessWidget {
@@ -735,7 +835,10 @@ class _MasonryGrid extends StatelessWidget {
                   for (final Note note in buckets[c])
                     Padding(
                       padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
-                      child: buildCard(note),
+                      // Keeps a card's own animations — the tap scale, a
+                      // checklist progress bar — from repainting its
+                      // neighbours.
+                      child: RepaintBoundary(child: buildCard(note)),
                     ),
                 ],
               ),
@@ -772,9 +875,46 @@ class _SwipeBackground extends StatelessWidget {
 
 // --------------------------------------------------------------------- fab
 
-class _ExpandingFab extends StatefulWidget {
-  const _ExpandingFab({required this.onNewNote, required this.onNewChecklist});
+/// Dims and swallows taps behind the expanded FAB.
+class _FabScrim extends StatelessWidget {
+  const _FabScrim({required this.open});
 
+  final ValueNotifier<bool> open;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: open,
+      builder: (BuildContext context, bool isOpen, Widget? _) {
+        return IgnorePointer(
+          ignoring: !isOpen,
+          child: AnimatedOpacity(
+            opacity: isOpen ? 1 : 0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => open.value = false,
+              child: ColoredBox(
+                color: AppColors.bg.withValues(alpha: 0.55),
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ExpandingFab extends StatefulWidget {
+  const _ExpandingFab({
+    required this.open,
+    required this.onNewNote,
+    required this.onNewChecklist,
+  });
+
+  final ValueNotifier<bool> open;
   final VoidCallback onNewNote;
   final VoidCallback onNewChecklist;
 
@@ -794,83 +934,99 @@ class _ExpandingFabState extends State<_ExpandingFab>
     reverseCurve: Curves.easeIn,
   );
 
-  bool _open = false;
+  @override
+  void initState() {
+    super.initState();
+    widget.open.addListener(_onOpenChanged);
+  }
 
   @override
   void dispose() {
+    widget.open.removeListener(_onOpenChanged);
     _controller.dispose();
     super.dispose();
   }
 
-  void _toggle() {
-    HapticFeedback.lightImpact();
-    setState(() => _open = !_open);
-    if (_open) {
+  void _onOpenChanged() {
+    if (!mounted) return;
+    if (widget.open.value) {
       _controller.forward();
     } else {
       _controller.reverse();
     }
   }
 
+  void _toggle() {
+    HapticFeedback.lightImpact();
+    widget.open.value = !widget.open.value;
+  }
+
   void _pick(VoidCallback action) {
-    _controller.reverse();
-    setState(() => _open = false);
+    widget.open.value = false;
     action();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: <Widget>[
-        _MiniAction(
-          animation: _curve,
-          index: 1,
-          icon: Icons.checklist_rounded,
-          label: 'Checklist',
-          accent: AppColors.lime,
-          onTap: () => _pick(widget.onNewChecklist),
-        ),
-        _MiniAction(
-          animation: _curve,
-          index: 0,
-          icon: Icons.notes_rounded,
-          label: 'Note',
-          accent: AppColors.cyan,
-          onTap: () => _pick(widget.onNewNote),
-        ),
-        const SizedBox(height: 8),
-        GestureDetector(
-          onTap: _toggle,
-          child: Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              shape: BoxShape.circle,
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: AppColors.violet.withValues(alpha: 0.55),
-                  blurRadius: 26,
-                  spreadRadius: -2,
-                  offset: const Offset(0, 10),
-                ),
-              ],
+    return ValueListenableBuilder<bool>(
+      valueListenable: widget.open,
+      builder: (BuildContext context, bool isOpen, Widget? _) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: <Widget>[
+            _MiniAction(
+              animation: _curve,
+              icon: Icons.checklist_rounded,
+              label: 'Checklist',
+              accent: AppColors.lime,
+              onTap: () => _pick(widget.onNewChecklist),
             ),
-            child: AnimatedRotation(
-              turns: _open ? 0.375 : 0,
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutBack,
-              child: const Icon(
-                Icons.add_rounded,
-                size: 30,
-                color: Colors.white,
+            _MiniAction(
+              animation: _curve,
+              icon: Icons.notes_rounded,
+              label: 'Note',
+              accent: AppColors.cyan,
+              onTap: () => _pick(widget.onNewNote),
+            ),
+            const SizedBox(height: 8),
+            Semantics(
+              button: true,
+              expanded: isOpen,
+              label: isOpen ? 'Close new note menu' : 'New note',
+              child: GestureDetector(
+                onTap: _toggle,
+                child: Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    shape: BoxShape.circle,
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: AppColors.violet.withValues(alpha: 0.55),
+                        blurRadius: 26,
+                        spreadRadius: -2,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: AnimatedRotation(
+                    turns: isOpen ? 0.375 : 0,
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutBack,
+                    child: const Icon(
+                      Icons.add_rounded,
+                      size: 30,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
@@ -878,7 +1034,6 @@ class _ExpandingFabState extends State<_ExpandingFab>
 class _MiniAction extends StatelessWidget {
   const _MiniAction({
     required this.animation,
-    required this.index,
     required this.icon,
     required this.label,
     required this.accent,
@@ -886,7 +1041,6 @@ class _MiniAction extends StatelessWidget {
   });
 
   final Animation<double> animation;
-  final int index;
   final IconData icon;
   final String label;
   final Color accent;
@@ -898,6 +1052,7 @@ class _MiniAction extends StatelessWidget {
       animation: animation,
       builder: (BuildContext context, Widget? child) {
         final double t = animation.value.clamp(0.0, 1.0);
+        final bool interactive = t >= 0.6;
         return Opacity(
           opacity: t,
           child: Transform.translate(
@@ -905,7 +1060,13 @@ class _MiniAction extends StatelessWidget {
             child: Transform.scale(
               scale: 0.85 + 0.15 * t,
               alignment: Alignment.centerRight,
-              child: IgnorePointer(ignoring: t < 0.6, child: child),
+              // While collapsed these are invisible but still laid out, so
+              // they have to be kept out of the semantics tree as well —
+              // otherwise a screen reader offers two buttons nobody can see.
+              child: ExcludeSemantics(
+                excluding: !interactive,
+                child: IgnorePointer(ignoring: !interactive, child: child),
+              ),
             ),
           ),
         );
@@ -914,26 +1075,31 @@ class _MiniAction extends StatelessWidget {
         // Kept compact: the Scaffold's FAB slot is height-constrained, and a
         // taller stack overflows it once both actions are expanded.
         padding: const EdgeInsets.only(bottom: 8),
-        child: GestureDetector(
-          onTap: onTap,
-          child: GlassPanel(
-            radius: 16,
-            blur: 20,
-            fill: AppColors.glassFillStrong,
-            glow: accent,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(icon, size: 17, color: accent),
-                const SizedBox(width: 9),
-                Text(
-                  label,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontSize: 13.5),
-                ),
-              ],
+        child: Semantics(
+          button: true,
+          label: label,
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: onTap,
+            child: GlassPanel(
+              radius: 16,
+              blur: 20,
+              fill: AppColors.glassFillStrong,
+              glow: accent,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(icon, size: 17, color: accent),
+                  const SizedBox(width: 9),
+                  Text(
+                    label,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelLarge?.copyWith(fontSize: 13.5),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

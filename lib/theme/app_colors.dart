@@ -25,6 +25,16 @@ class AppColors {
     blue,
   ];
 
+  /// Spoken names for [accents], so the colour picker is usable without sight.
+  static const List<String> accentNames = <String>[
+    'Violet',
+    'Cyan',
+    'Pink',
+    'Lime',
+    'Amber',
+    'Blue',
+  ];
+
   static Color accentAt(int index) => accents[index.abs() % accents.length];
 
   // Type
