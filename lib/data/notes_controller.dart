@@ -8,44 +8,103 @@ import 'note_store.dart';
 enum NoteFilter { all, favorites, archive }
 
 /// Single source of truth for notes, search and filters.
+///
+/// Every derived list ([visibleNotes], [allTags], …) is computed once per
+/// mutation and cached. Widgets read these getters from `build`, which runs
+/// far more often than the data changes, so recomputing a filter-and-sort on
+/// each read showed up as jank once a few hundred notes were on screen.
 class NotesController extends ChangeNotifier {
   NotesController({NoteStore? store}) : _store = store ?? PrefsNoteStore();
+
+  /// How long to coalesce edits before writing to disk.
+  static const Duration saveDebounce = Duration(milliseconds: 350);
+
+  /// How long to wait after the last keystroke before re-running a search.
+  static const Duration searchDebounce = Duration(milliseconds: 180);
 
   final NoteStore _store;
   final List<Note> _notes = <Note>[];
 
   bool _loading = true;
   String _query = '';
+  String _pendingQuery = '';
   String? _activeTag;
   String? _activeFolder;
   NoteFilter _filter = NoteFilter.all;
   Timer? _saveDebounce;
+  Timer? _searchDebounce;
+  bool _disposed = false;
 
   bool get loading => _loading;
+
+  /// The query currently applied to [visibleNotes]. Lags the text field by up
+  /// to [searchDebounce] while the user is typing.
   String get query => _query;
   String? get activeTag => _activeTag;
   String? get activeFolder => _activeFolder;
   NoteFilter get filter => _filter;
 
-  bool get hasAnyNote => _notes.any((Note n) => !n.archived);
-  int get archivedCount => _notes.where((Note n) => n.archived).length;
-  int get favoriteCount =>
-      _notes.where((Note n) => n.favorite && !n.archived).length;
+  /// True while a typed query has not yet been applied.
+  bool get searchPending => _pendingQuery != _query;
+
+  // ------------------------------------------------------------ derived cache
+
+  List<Note>? _visibleCache;
+  List<String>? _tagsCache;
+  List<String>? _foldersCache;
+  Map<String, int>? _folderCountsCache;
+  List<Note>? _activeCache;
+  Map<String, Note>? _byIdCache;
+  int? _archivedCountCache;
+  int? _favoriteCountCache;
+
+  /// Drops every memoized projection. Called whenever notes or filters change.
+  void _invalidate({bool notesChanged = true}) {
+    _visibleCache = null;
+    if (notesChanged) {
+      _tagsCache = null;
+      _foldersCache = null;
+      _folderCountsCache = null;
+      _activeCache = null;
+      _byIdCache = null;
+      _archivedCountCache = null;
+      _favoriteCountCache = null;
+    }
+  }
+
+  /// Invalidates, then notifies — the order matters, or listeners rebuild
+  /// against stale caches.
+  void _changed({bool notesChanged = true}) {
+    _invalidate(notesChanged: notesChanged);
+    notifyListeners();
+  }
 
   Future<void> init() async {
     final List<Note> loaded = await _store.load();
+    if (_disposed) return;
     _notes
       ..clear()
       ..addAll(loaded);
     if (_notes.isEmpty) _notes.addAll(_seedNotes());
     _loading = false;
-    notifyListeners();
+    _changed();
   }
 
   // ---------------------------------------------------------------- queries
 
+  bool get hasAnyNote => activeNotes.isNotEmpty;
+
+  int get archivedCount =>
+      _archivedCountCache ??= _notes.where((Note n) => n.archived).length;
+
+  int get favoriteCount => _favoriteCountCache ??= _notes
+      .where((Note n) => n.favorite && !n.archived)
+      .length;
+
   /// Every tag in use, most-used first.
-  List<String> get allTags {
+  List<String> get allTags => _tagsCache ??= _computeTags();
+
+  List<String> _computeTags() {
     final Map<String, int> counts = <String, int>{};
     for (final Note note in _notes) {
       if (note.archived) continue;
@@ -53,35 +112,48 @@ class NotesController extends ChangeNotifier {
         counts[tag] = (counts[tag] ?? 0) + 1;
       }
     }
-    final List<String> tags = counts.keys.toList()
-      ..sort((String a, String b) {
-        final int byCount = counts[b]!.compareTo(counts[a]!);
-        return byCount != 0
-            ? byCount
-            : a.toLowerCase().compareTo(b.toLowerCase());
-      });
-    return tags;
+    return counts.keys.toList()..sort((String a, String b) {
+      final int byCount = counts[b]!.compareTo(counts[a]!);
+      return byCount != 0
+          ? byCount
+          : a.toLowerCase().compareTo(b.toLowerCase());
+    });
   }
 
   /// Folders in use, alphabetical.
   List<String> get allFolders {
-    final Set<String> folders = <String>{};
+    _ensureFolders();
+    return _foldersCache!;
+  }
+
+  /// Folder list and per-folder counts share one pass — the home screen always
+  /// needs both.
+  void _ensureFolders() {
+    if (_foldersCache != null) return;
+    final Map<String, int> counts = <String, int>{};
+    final Set<String> all = <String>{};
     for (final Note note in _notes) {
       final String? folder = note.folder;
-      if (folder != null && folder.trim().isNotEmpty) folders.add(folder);
+      if (folder == null || folder.trim().isEmpty) continue;
+      all.add(folder);
+      if (!note.archived) counts[folder] = (counts[folder] ?? 0) + 1;
     }
-    final List<String> list = folders.toList()
+    _foldersCache = all.toList()
       ..sort(
         (String a, String b) => a.toLowerCase().compareTo(b.toLowerCase()),
       );
-    return list;
+    _folderCountsCache = counts;
   }
 
-  int notesInFolder(String folder) =>
-      _notes.where((Note n) => !n.archived && n.folder == folder).length;
+  int notesInFolder(String folder) {
+    _ensureFolders();
+    return _folderCountsCache![folder] ?? 0;
+  }
 
   /// Filtered + sorted notes for the current view. Pinned float to the top.
-  List<Note> get visibleNotes {
+  List<Note> get visibleNotes => _visibleCache ??= _computeVisible();
+
+  List<Note> _computeVisible() {
     final String q = _query.trim().toLowerCase();
 
     final List<Note> result = _notes.where((Note note) {
@@ -97,11 +169,7 @@ class NotesController extends ChangeNotifier {
       if (_activeTag != null && !note.tags.contains(_activeTag)) return false;
       if (_activeFolder != null && note.folder != _activeFolder) return false;
 
-      if (q.isEmpty) return true;
-      return note.title.toLowerCase().contains(q) ||
-          note.body.toLowerCase().contains(q) ||
-          note.tags.any((String t) => t.toLowerCase().contains(q)) ||
-          note.items.any((ChecklistItem i) => i.text.toLowerCase().contains(q));
+      return q.isEmpty || note.matches(q);
     }).toList();
 
     result.sort((Note a, Note b) {
@@ -109,51 +177,82 @@ class NotesController extends ChangeNotifier {
       return b.updatedAt.compareTo(a.updatedAt);
     });
 
-    return result;
+    return List<Note>.unmodifiable(result);
   }
 
   /// Every non-archived note, unaffected by the current view filters.
   /// Used by the calendar to mark days that already have notes.
-  List<Note> get activeNotes =>
-      _notes.where((Note n) => !n.archived).toList(growable: false);
+  List<Note> get activeNotes => _activeCache ??= List<Note>.unmodifiable(
+    _notes.where((Note n) => !n.archived),
+  );
 
-  Note? byId(String id) {
-    for (final Note note in _notes) {
-      if (note.id == id) return note;
-    }
-    return null;
-  }
+  Note? byId(String id) => (_byIdCache ??= <String, Note>{
+    for (final Note note in _notes) note.id: note,
+  })[id];
 
   // ---------------------------------------------------------------- filters
 
+  /// Applies [value] immediately.
   void search(String value) {
+    _pendingQuery = value;
+    _applyQuery(value);
+  }
+
+  /// Applies [value] after [searchDebounce] elapses without another keystroke.
+  ///
+  /// Every applied query re-filters and re-sorts the whole list, so running
+  /// that once per character is wasted work on a long list. The text field
+  /// itself still updates on every keystroke — only the filtering waits.
+  void searchAsYouType(String value) {
+    if (_pendingQuery == value) return;
+    _pendingQuery = value;
+
+    _searchDebounce?.cancel();
+    // Clearing the field should feel instant; only typing is debounced.
+    if (value.isEmpty) {
+      _applyQuery(value);
+      return;
+    }
+    _searchDebounce = Timer(searchDebounce, () => _applyQuery(value));
+  }
+
+  void _applyQuery(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = null;
     if (_query == value) return;
     _query = value;
-    notifyListeners();
+    _changed(notesChanged: false);
   }
+
+  /// Applies any pending query immediately — used when the user submits the
+  /// search field rather than waiting out the debounce.
+  void commitSearch() => _applyQuery(_pendingQuery);
 
   void setFilter(NoteFilter value) {
     if (_filter == value) return;
     _filter = value;
-    notifyListeners();
+    _changed(notesChanged: false);
   }
 
   void toggleTagFilter(String? tag) {
     _activeTag = _activeTag == tag ? null : tag;
-    notifyListeners();
+    _changed(notesChanged: false);
   }
 
   void selectFolder(String? folder) {
     _activeFolder = _activeFolder == folder ? null : folder;
-    notifyListeners();
+    _changed(notesChanged: false);
   }
 
   void clearFilters() {
+    _searchDebounce?.cancel();
+    _searchDebounce = null;
     _query = '';
+    _pendingQuery = '';
     _activeTag = null;
     _activeFolder = null;
     _filter = NoteFilter.all;
-    notifyListeners();
+    _changed(notesChanged: false);
   }
 
   // ---------------------------------------------------------------- mutation
@@ -170,7 +269,7 @@ class NotesController extends ChangeNotifier {
       if (index != -1) {
         _notes.removeAt(index);
         _scheduleSave();
-        notifyListeners();
+        _changed();
       }
       return;
     }
@@ -178,23 +277,26 @@ class NotesController extends ChangeNotifier {
     if (index == -1) {
       _notes.add(note);
     } else {
+      if (identical(_notes[index], note)) return;
       _notes[index] = note;
     }
     _scheduleSave();
-    notifyListeners();
+    _changed();
   }
 
   void delete(String id) {
+    final int before = _notes.length;
     _notes.removeWhere((Note n) => n.id == id);
+    if (_notes.length == before) return;
     _scheduleSave();
-    notifyListeners();
+    _changed();
   }
 
   /// Re-inserts a deleted note (undo support).
   void restore(Note note) {
     _notes.add(note);
     _scheduleSave();
-    notifyListeners();
+    _changed();
   }
 
   void togglePin(String id) =>
@@ -228,7 +330,7 @@ class NotesController extends ChangeNotifier {
     if (index == -1) return;
     _notes[index] = transform(_notes[index]);
     _scheduleSave();
-    notifyListeners();
+    _changed();
   }
 
   // ---------------------------------------------------------------- saving
@@ -236,20 +338,45 @@ class NotesController extends ChangeNotifier {
   /// Coalesces bursts of edits into one write.
   void _scheduleSave() {
     _saveDebounce?.cancel();
-    _saveDebounce = Timer(
-      const Duration(milliseconds: 350),
-      () => _store.save(_notes),
-    );
+    _saveDebounce = Timer(saveDebounce, () {
+      _saveDebounce = null;
+      unawaited(_store.save(_notes));
+    });
   }
 
+  /// True when an edit is waiting to be written to disk.
+  @visibleForTesting
+  bool get hasPendingSave => _saveDebounce != null;
+
+  /// Writes immediately, cancelling any pending debounce.
+  ///
+  /// Called when the app leaves the foreground: Android and iOS may kill a
+  /// backgrounded process without further warning, and a debounced write that
+  /// never ran is a lost note.
   Future<void> flush() async {
     _saveDebounce?.cancel();
+    _saveDebounce = null;
     await _store.save(_notes);
+  }
+
+  /// Flushes only if something is actually pending, so routine lifecycle
+  /// transitions do not cause redundant disk writes.
+  Future<void> flushIfPending() async {
+    if (_saveDebounce == null) return;
+    await flush();
   }
 
   @override
   void dispose() {
-    _saveDebounce?.cancel();
+    _disposed = true;
+    _searchDebounce?.cancel();
+    // A pending edit must still reach disk — cancelling the timer alone would
+    // silently drop it.
+    if (_saveDebounce != null) {
+      _saveDebounce!.cancel();
+      _saveDebounce = null;
+      unawaited(_store.save(_notes));
+    }
     super.dispose();
   }
 

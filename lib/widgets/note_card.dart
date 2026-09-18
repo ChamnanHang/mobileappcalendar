@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/note.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
-import '../utils/markdown_controller.dart';
 import '../utils/relative_time.dart';
 import 'glass.dart';
 
@@ -37,6 +36,8 @@ class NoteCard extends StatelessWidget {
       onLongPress: onLongPress,
       radius: AppTheme.radiusLg,
       glow: accent,
+      // Dozens of these can be on screen at once; see GlassPanel.blurred.
+      blurred: false,
       padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -86,9 +87,9 @@ class NoteCard extends StatelessWidget {
               accent: accent,
               onToggleItem: onToggleItem,
             )
-          else if (note.preview.isNotEmpty)
+          else if (note.plainPreview.isNotEmpty)
             Text(
-              stripMarkdown(note.preview),
+              note.plainPreview,
               maxLines: 6,
               overflow: TextOverflow.ellipsis,
               style: text.bodySmall?.copyWith(
@@ -122,45 +123,50 @@ class _ChecklistPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextTheme text = Theme.of(context).textTheme;
-    final List<ChecklistItem> shown = note.items
+    final List<ChecklistItem> filled = note.items
         .where((ChecklistItem i) => i.text.trim().isNotEmpty)
-        .take(4)
-        .toList();
-    final int remaining =
-        note.items.where((ChecklistItem i) => i.text.trim().isNotEmpty).length -
-        shown.length;
+        .toList(growable: false);
+    final List<ChecklistItem> shown = filled.take(4).toList(growable: false);
+    final int remaining = filled.length - shown.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         for (final ChecklistItem item in shown)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 7),
+          Semantics(
+            checked: item.done,
+            label: item.text.trim(),
+            excludeSemantics: true,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onToggleItem == null ? null : () => onToggleItem!(item.id),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  _Tick(done: item.done, accent: accent),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: Text(
-                      item.text.trim(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.bodySmall?.copyWith(
-                        color: item.done
-                            ? AppColors.textLow
-                            : AppColors.textMid,
-                        decoration: item.done
-                            ? TextDecoration.lineThrough
-                            : null,
-                        decorationColor: AppColors.textLow,
+              // Vertical padding rather than a margin, so the whole strip is
+              // tappable instead of just the 15dp tick.
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    _Tick(done: item.done, accent: accent),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        item.text.trim(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.bodySmall?.copyWith(
+                          color: item.done
+                              ? AppColors.textLow
+                              : AppColors.textMid,
+                          decoration: item.done
+                              ? TextDecoration.lineThrough
+                              : null,
+                          decorationColor: AppColors.textLow,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -174,19 +180,22 @@ class _ChecklistPreview extends StatelessWidget {
           ),
         if (note.items.isNotEmpty) ...<Widget>[
           const SizedBox(height: 9),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: TweenAnimationBuilder<double>(
-              tween: Tween<double>(end: note.progress),
-              duration: const Duration(milliseconds: 380),
-              curve: Curves.easeOutCubic,
-              builder: (BuildContext context, double value, Widget? _) =>
-                  LinearProgressIndicator(
-                    value: value,
-                    minHeight: 4,
-                    backgroundColor: Colors.white.withValues(alpha: 0.07),
-                    valueColor: AlwaysStoppedAnimation<Color>(accent),
-                  ),
+          Semantics(
+            label: '${note.doneCount} of ${note.items.length} items done',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(end: note.progress),
+                duration: const Duration(milliseconds: 380),
+                curve: Curves.easeOutCubic,
+                builder: (BuildContext context, double value, Widget? _) =>
+                    LinearProgressIndicator(
+                      value: value,
+                      minHeight: 4,
+                      backgroundColor: Colors.white.withValues(alpha: 0.07),
+                      valueColor: AlwaysStoppedAnimation<Color>(accent),
+                    ),
+              ),
             ),
           ),
         ],
@@ -260,15 +269,20 @@ class _CardFooter extends StatelessWidget {
             ],
           ),
         ),
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onToggleFavorite,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            child: Icon(
-              note.favorite ? Icons.star_rounded : Icons.star_outline_rounded,
-              size: 18,
-              color: note.favorite ? AppColors.amber : AppColors.textLow,
+        Semantics(
+          button: true,
+          toggled: note.favorite,
+          label: note.favorite ? 'Unfavourite' : 'Favourite',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onToggleFavorite,
+            child: TapTarget(
+              size: 40,
+              child: Icon(
+                note.favorite ? Icons.star_rounded : Icons.star_outline_rounded,
+                size: 18,
+                color: note.favorite ? AppColors.amber : AppColors.textLow,
+              ),
             ),
           ),
         ),
