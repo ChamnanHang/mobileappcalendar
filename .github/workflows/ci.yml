@@ -17,13 +17,15 @@ jobs:
       - run: flutter analyze
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test
-      - name: No test ad unit IDs in a shipped manifest
-        # Google's sample IDs must never reach a store build. They are the
-        # defaults for local runs, so this only guards against someone
-        # hard-coding them in place of the --dart-define.
+      - name: Google test ad IDs stay confined to ads.dart
+        # They are the documented --dart-define fallbacks in lib/data/ads.dart
+        # and belong there. Anywhere else in lib/ means one has been pasted in
+        # place of the dart-define, which would ship test ads to real users.
+        # The safety properties themselves (ads off by default, test units
+        # detected) are asserted in test/ads_config_test.dart.
         run: |
-          if grep -rn "ca-app-pub-3940256099942544" lib/ ; then
-            echo "::error::Google test ad IDs are hard-coded in lib/."
+          if grep -rn --exclude=ads.dart "ca-app-pub-3940256099942544" lib/ ; then
+            echo "::error::Google test ad unit IDs found outside lib/data/ads.dart."
             exit 1
           fi
       - name: Run tests
