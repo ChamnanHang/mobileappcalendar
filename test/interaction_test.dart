@@ -61,15 +61,42 @@ void main() {
       expect(find.text(monthLabel(previous)), findsOneWidget);
     });
 
-    testWidgets('a slow drag does not change month', (
+    testWidgets('a slow drag with no fling velocity still changes month', (
+      WidgetTester tester,
+    ) async {
+      await openCalendar(tester);
+      final DateTime now = DateTime.now();
+      final DateTime next = DateTime(now.year, now.month + 1);
+
+      // Drag far, then pause before releasing so the velocity tracker has
+      // nothing recent to estimate from — primaryVelocity comes back 0. This
+      // is the case a velocity-only gate silently dropped: the user hauls the
+      // grid most of the way across the screen and the month never changes.
+      final Offset start = tester.getCenter(find.byType(Scaffold).last);
+      final TestGesture gesture = await tester.startGesture(start);
+      for (int i = 0; i < 10; i++) {
+        await gesture.moveBy(const Offset(-30, 0));
+        await tester.pump(const Duration(milliseconds: 40));
+      }
+      // The pause is what zeroes the velocity estimate.
+      await tester.pump(const Duration(milliseconds: 500));
+      await gesture.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text(monthLabel(next)), findsOneWidget);
+    });
+
+    testWidgets('a short drag does not change month', (
       WidgetTester tester,
     ) async {
       await openCalendar(tester);
       final DateTime now = DateTime.now();
       final String current = monthLabel(DateTime(now.year, now.month));
 
-      // Below the fling threshold — a stray sideways drag during a scroll.
-      await tester.fling(find.byType(Scaffold).last, const Offset(-120, 0), 60);
+      // Under both gates: too slow to be a fling, too short to be a
+      // deliberate drag — a stray sideways wobble during a vertical scroll.
+      await tester.fling(find.byType(Scaffold).last, const Offset(-40, 0), 60);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 

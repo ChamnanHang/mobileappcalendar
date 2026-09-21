@@ -227,11 +227,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 }
 
-/// Wraps the grid in a horizontal fling gesture and slides between months.
+/// Wraps the grid in a horizontal swipe gesture and slides between months.
 ///
 /// Stepping a calendar with only the two chevrons is unusual on a phone;
 /// swiping is what people reach for first.
-class _SwipeableMonth extends StatelessWidget {
+class _SwipeableMonth extends StatefulWidget {
   const _SwipeableMonth({
     required this.month,
     required this.direction,
@@ -239,10 +239,19 @@ class _SwipeableMonth extends StatelessWidget {
     required this.child,
   });
 
-  /// Velocity past which a drag counts as a month change, in logical pixels
-  /// per second. Low enough to feel responsive, high enough that a vertical
-  /// scroll with a little sideways drift does not trigger it.
-  static const double _flingThreshold = 220;
+  /// A flick past this speed changes month regardless of how far it travelled,
+  /// in logical pixels per second. Low enough to feel responsive, high enough
+  /// that a vertical scroll with a little sideways drift does not trigger it.
+  static const double flingVelocity = 220;
+
+  /// A slow drag past this fraction of the grid's width also changes month.
+  ///
+  /// Velocity alone is not enough to gate on. `DragEndDetails.primaryVelocity`
+  /// is zero whenever the velocity tracker cannot form an estimate — a drag
+  /// that pauses before release, some assistive-input paths, and synthetic
+  /// events — and a deliberate drag halfway across the screen that then does
+  /// nothing feels broken. Distance is the fallback every carousel uses.
+  static const double minDragFraction = 0.22;
 
   final DateTime month;
   final int direction;
@@ -250,16 +259,51 @@ class _SwipeableMonth extends StatelessWidget {
   final Widget child;
 
   @override
+  State<_SwipeableMonth> createState() => _SwipeableMonthState();
+}
+
+class _SwipeableMonthState extends State<_SwipeableMonth> {
+  /// Accumulated horizontal travel of the drag in progress.
+  double _dragDx = 0;
+
+  void _onStart(DragStartDetails _) => _dragDx = 0;
+
+  void _onUpdate(DragUpdateDetails details) =>
+      _dragDx += details.primaryDelta ?? 0;
+
+  void _onEnd(DragEndDetails details) {
+    final double travelled = _dragDx;
+    _dragDx = 0;
+
+    final double velocity = details.primaryVelocity ?? 0;
+    // Dragging right (positive) reveals the previous month.
+    if (velocity.abs() >= _SwipeableMonth.flingVelocity) {
+      widget.onSwipe(velocity > 0 ? -1 : 1);
+      return;
+    }
+
+    final double width = context.size?.width ?? 0;
+    final double minDx = width * _SwipeableMonth.minDragFraction;
+    if (minDx > 0 && travelled.abs() >= minDx) {
+      widget.onSwipe(travelled > 0 ? -1 : 1);
+    }
+  }
+
+  void _onCancel() => _dragDx = 0;
+
+  @override
   Widget build(BuildContext context) {
+    final ValueKey<String> currentKey = ValueKey<String>(
+      '${widget.month.year}-${widget.month.month}',
+    );
+
     return GestureDetector(
       // Only claims horizontal drags, so the surrounding vertical ListView
       // keeps working normally.
-      onHorizontalDragEnd: (DragEndDetails details) {
-        final double velocity = details.primaryVelocity ?? 0;
-        if (velocity.abs() < _flingThreshold) return;
-        // Dragging right (positive velocity) reveals the previous month.
-        onSwipe(velocity > 0 ? -1 : 1);
-      },
+      onHorizontalDragStart: _onStart,
+      onHorizontalDragUpdate: _onUpdate,
+      onHorizontalDragEnd: _onEnd,
+      onHorizontalDragCancel: _onCancel,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 260),
         switchInCurve: Curves.easeOutCubic,
@@ -271,9 +315,10 @@ class _SwipeableMonth extends StatelessWidget {
           children: <Widget>[...previous, ?current],
         ),
         transitionBuilder: (Widget child, Animation<double> animation) {
-          final bool incoming =
-              child.key == ValueKey<String>('${month.year}-${month.month}');
-          final double from = incoming ? direction * 0.12 : direction * -0.12;
+          final bool incoming = child.key == currentKey;
+          final double from = incoming
+              ? widget.direction * 0.12
+              : widget.direction * -0.12;
           return FadeTransition(
             opacity: animation,
             child: SlideTransition(
@@ -285,7 +330,7 @@ class _SwipeableMonth extends StatelessWidget {
             ),
           );
         },
-        child: child,
+        child: widget.child,
       ),
     );
   }
