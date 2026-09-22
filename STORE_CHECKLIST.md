@@ -133,10 +133,20 @@ reused build number.
 
 ## Not yet verified
 
-**Neither release build has been compiled.** The environment this was last worked in has the Flutter
-SDK but no Android SDK and no Xcode, so `flutter build appbundle` and `flutter build ipa` have never
-run. `flutter analyze` is clean and the full test suite passes, but that covers Dart only — it says
-nothing about Gradle, R8, the manifest merge, CocoaPods or code signing.
+**Android release now builds; iOS is building in CI for the first time.**
+
+The `build-android` job compiles a release APK and app bundle, so R8, resource shrinking,
+`proguard-rules.pro` and the manifest merge are all exercised and passing — release APK 52.9 MB,
+bundle 54.4 MB. (The APK is universal, carrying every ABI; Play splits the bundle per device, so
+what users download is far smaller.)
+
+The `build-ios` job runs on a macOS runner and compiles for the simulator, which covers the Dart
+build, CocoaPods resolution and linking, and asserts that `PrivacyInfo.xcprivacy` is actually inside
+`Runner.app` rather than merely present in the repo.
+
+**Still not exercised anywhere: code signing.** Neither the Android upload key nor an iOS
+distribution certificate is in the repo, so `flutter build ipa` and a Play-acceptable signed bundle
+have never been produced. Expect the first signed build to need a few attempts.
 
 Everything marked **[done]** above is configuration that has been read, edited and checked for
 well-formedness (the plist parses, the XML parses, the `.pbxproj` sections and brace balance are

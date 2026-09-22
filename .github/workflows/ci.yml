@@ -85,3 +85,65 @@ jobs:
             build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
+
+  build-ios:
+    # iOS builds need macOS and Xcode; there is no cross-compiling from Linux.
+    # macOS runner minutes are free on public repositories.
+    runs-on: macos-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+
+      # No signing identity is available on a runner, and the simulator does
+      # not need one. This still compiles the Dart, resolves the CocoaPods
+      # dependencies and links the whole app, which is everything short of
+      # code signing.
+      - name: Build for the iOS simulator
+        run: flutter build ios --simulator --no-codesign
+
+      # The privacy manifest has to be *inside* the built app, not merely
+      # present in the repo. It sat on disk but outside the Xcode target for a
+      # while, so it was never bundled — Apple rejects an AdMob app on exactly
+      # that. Only a real build can tell the difference.
+      - name: Verify the privacy manifest is bundled
+        run: |
+          APP=build/ios/iphonesimulator/Runner.app
+          if [ ! -f "$APP/PrivacyInfo.xcprivacy" ]; then
+            echo "::error::PrivacyInfo.xcprivacy is missing from $APP — it is"
+            echo "::error::probably not in Copy Bundle Resources in the Xcode target."
+            exit 1
+          fi
+          plutil -lint "$APP/PrivacyInfo.xcprivacy"
+          echo "PrivacyInfo.xcprivacy is bundled and well-formed."
+
+      # Guards the dark launch screen and the pinned interface style, both of
+      # which only take effect once they are compiled into the bundle.
+      - name: Verify Info.plist keys survived the build
+        run: |
+          PLIST=build/ios/iphonesimulator/Runner.app/Info.plist
+          style=$(plutil -extract UIUserInterfaceStyle raw "$PLIST")
+          enc=$(plutil -extract ITSAppUsesNonExemptEncryption raw "$PLIST")
+          echo "UIUserInterfaceStyle=$style ITSAppUsesNonExemptEncryption=$enc"
+          [ "$style" = "Dark" ] || { echo "::error::UIUserInterfaceStyle is not Dark"; exit 1; }
+
+      - name: Package the simulator app
+        run: |
+          cd build/ios/iphonesimulator
+          zip -qry Runner-simulator.zip Runner.app
+          ls -lh Runner-simulator.zip
+
+      # Install on a booted simulator with:
+      #   unzip Runner-simulator.zip
+      #   xcrun simctl install booted Runner.app
+      #   xcrun simctl launch booted com.khmercalendar.noted
+      - name: Upload the simulator build
+        uses: actions/upload-artifact@v4
+        with:
+          name: noted-ios-simulator
+          path: build/ios/iphonesimulator/Runner-simulator.zip
+          if-no-files-found: error
+          retention-days: 14
