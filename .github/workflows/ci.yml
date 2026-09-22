@@ -46,7 +46,42 @@ jobs:
         with:
           channel: stable
       - run: flutter pub get
-      # Debug-signed: release signing needs the keystore, which is not in the repo.
-      # This still exercises the release Gradle path — R8, resource shrinking
-      # and the manifest merge — which is where store builds usually break.
-      - run: flutter build appbundle --debug
+
+      # Installable on an emulator or a phone straight away:
+      #   adb install -r app-debug.apk
+      # or drag the file onto a running emulator window.
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      # This is the build that actually runs R8, resource shrinking and
+      # proguard-rules.pro — the earlier `appbundle --debug` did not, because
+      # minify and shrinking are configured only on the release buildType. A
+      # missing keep rule for the ads SDK shows up here and nowhere else.
+      #
+      # Without android/key.properties this falls back to the debug signing
+      # key (see android/app/build.gradle.kts). Play rejects that, but an
+      # emulator installs it happily, which is what these artifacts are for.
+      - name: Build release APK (runs R8 + resource shrinking)
+        run: flutter build apk --release
+
+      # The shape Play actually takes.
+      - name: Build release app bundle
+        run: flutter build appbundle --release
+
+      - name: Report artifact sizes
+        run: |
+          ls -lh build/app/outputs/flutter-apk/*.apk
+          ls -lh build/app/outputs/bundle/release/*.aab
+
+      # Downloadable from the run's summary page, so the app can be installed
+      # without a local Android SDK.
+      - name: Upload APKs and bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: noted-android
+          path: |
+            build/app/outputs/flutter-apk/app-debug.apk
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14

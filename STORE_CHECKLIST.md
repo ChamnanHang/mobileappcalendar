@@ -143,5 +143,12 @@ well-formedness (the plist parses, the XML parses, the `.pbxproj` sections and b
 intact) — not configuration proven by a green build. Expect to fix a few Gradle/CocoaPods issues on
 the first real run.
 
-The `build-android` CI job builds a debug-signed bundle, which does exercise the release Gradle path
-(R8, resource shrinking, manifest merge) even though it cannot exercise release signing.
+The `build-android` CI job now builds a **release** APK and app bundle, which does exercise R8,
+resource shrinking and `proguard-rules.pro` — an earlier version of this job built only a debug
+bundle and claimed otherwise, which was wrong: minify and shrinking are configured on the release
+buildType alone. Release *signing* is still not exercised, because the keystore is not in the repo;
+without `android/key.properties` the build falls back to the debug key.
+
+Both APKs and the bundle upload as a run artifact named `noted-android`, downloadable from the
+workflow run's summary page — so the app can be installed on an emulator or a phone
+(`adb install -r app-debug.apk`) without a local Android SDK.
