@@ -140,9 +140,13 @@ The `build-android` job compiles a release APK and app bundle, so R8, resource s
 bundle 54.4 MB. (The APK is universal, carrying every ABI; Play splits the bundle per device, so
 what users download is far smaller.)
 
-The `build-ios` job runs on a macOS runner and compiles for the simulator, which covers the Dart
-build, CocoaPods resolution and linking, and asserts that `PrivacyInfo.xcprivacy` is actually inside
-`Runner.app` rather than merely present in the repo.
+The `build-ios` job runs on a macOS runner and compiles for the simulator — **passing**, the first
+time the iOS side has ever been compiled. It covers the Dart build, CocoaPods resolution and
+linking, and asserts on the built bundle rather than on the repo: `PrivacyInfo.xcprivacy` is inside
+`Runner.app` and well-formed, and the Info.plist carries `UIUserInterfaceStyle=Dark` and
+`ITSAppUsesNonExemptEncryption=false`. That retires the warning this file used to carry about the
+privacy manifest sitting outside the Xcode target — it is now proven bundled by a real build, not
+by reading the `.pbxproj`.
 
 **Still not exercised anywhere: code signing.** Neither the Android upload key nor an iOS
 distribution certificate is in the repo, so `flutter build ipa` and a Play-acceptable signed bundle
