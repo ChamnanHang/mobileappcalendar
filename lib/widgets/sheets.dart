@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import '../models/note.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
-import 'glass.dart';
+import 'surface.dart';
 
-/// Shows a rounded glass bottom sheet.
-Future<T?> showGlassSheet<T>({
+/// Shows a bottom sheet on a flat surface with a hairline border.
+Future<T?> showAppSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
 }) {
@@ -14,36 +14,35 @@ Future<T?> showGlassSheet<T>({
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.55),
+    barrierColor: context.palette.scrim,
     builder: (BuildContext context) => Padding(
       padding: EdgeInsets.only(
-        left: 12,
-        right: 12,
-        bottom: 12 + MediaQuery.viewInsetsOf(context).bottom,
+        left: 8,
+        right: 8,
+        bottom: 8 + MediaQuery.viewInsetsOf(context).bottom,
       ),
-      child: GlassPanel(
+      child: SurfaceCard(
         radius: AppTheme.radiusLg,
-        blur: 30,
-        fill: AppColors.glassFillStrong,
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
         child: SafeArea(top: false, child: builder(context)),
       ),
     ),
   );
 }
 
-class _SheetHandle extends StatelessWidget {
-  const _SheetHandle();
+class SheetHandle extends StatelessWidget {
+  const SheetHandle({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return Center(
       child: Container(
         width: 38,
         height: 4,
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
-          color: AppColors.glassBorderStrong,
+          color: p.borderStrong,
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -67,7 +66,7 @@ class NoteOptionsSheet extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const _SheetHandle(),
+        const SheetHandle(),
         SheetTile(
           icon: Icons.sell_outlined,
           label: 'Tags',
@@ -118,8 +117,9 @@ class SheetTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
-    final Color color = danger ? AppColors.pink : AppColors.textHigh;
+    final Color color = danger ? p.holiday : p.textPrimary;
 
     return InkWell(
       onTap: onTap,
@@ -128,11 +128,7 @@ class SheetTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 4),
         child: Row(
           children: <Widget>[
-            Icon(
-              icon,
-              size: 20,
-              color: danger ? AppColors.pink : AppColors.textMid,
-            ),
+            Icon(icon, size: 20, color: danger ? p.holiday : p.textSecondary),
             const SizedBox(width: 14),
             Expanded(
               child: Text(label, style: text.bodyLarge?.copyWith(color: color)),
@@ -145,7 +141,7 @@ class SheetTile extends StatelessWidget {
                   textAlign: TextAlign.right,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: text.labelSmall?.copyWith(color: AppColors.textLow),
+                  style: text.labelSmall?.copyWith(color: p.textTertiary),
                 ),
               ),
           ],
@@ -195,6 +191,7 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
     final List<String> unused = widget.suggestions
         .where((String t) => !_tags.contains(t))
@@ -204,16 +201,17 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const _SheetHandle(),
+        const SheetHandle(),
         Text('Tags', style: text.headlineSmall),
         const SizedBox(height: 14),
-        GlassPanel(
+        SurfaceCard(
           radius: AppTheme.radiusSm,
-          blur: 8,
+          color: p.surfaceMuted,
+          borderColor: Colors.transparent,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
             children: <Widget>[
-              Icon(Icons.tag_rounded, size: 17, color: AppColors.textLow),
+              Icon(Icons.tag_rounded, size: 17, color: p.textTertiary),
               const SizedBox(width: 8),
               Expanded(
                 child: TextField(
@@ -227,7 +225,7 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
               ),
               GestureDetector(
                 onTap: () => _add(_input.text),
-                child: Icon(Icons.add_rounded, size: 20, color: AppColors.cyan),
+                child: Icon(Icons.add_rounded, size: 20, color: p.accent),
               ),
             ],
           ),
@@ -252,7 +250,7 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
           const SizedBox(height: 18),
           Text(
             'Existing',
-            style: text.labelSmall?.copyWith(color: AppColors.textLow),
+            style: text.labelSmall?.copyWith(color: p.textTertiary),
           ),
           const SizedBox(height: 10),
           Wrap(
@@ -312,13 +310,14 @@ class _FolderPickerSheetState extends State<FolderPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const _SheetHandle(),
+        const SheetHandle(),
         Text('Folder', style: text.headlineSmall),
         const SizedBox(height: 14),
         SheetTile(
@@ -335,16 +334,17 @@ class _FolderPickerSheetState extends State<FolderPickerSheet> {
             onTap: () => Navigator.of(context).pop(FolderChoice(folder)),
           ),
         const SizedBox(height: 8),
-        GlassPanel(
+        SurfaceCard(
           radius: AppTheme.radiusSm,
-          blur: 8,
+          color: p.surfaceMuted,
+          borderColor: Colors.transparent,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
             children: <Widget>[
               Icon(
                 Icons.create_new_folder_outlined,
                 size: 17,
-                color: AppColors.textLow,
+                color: p.textTertiary,
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -364,7 +364,7 @@ class _FolderPickerSheetState extends State<FolderPickerSheet> {
                   if (_input.text.trim().isEmpty) return;
                   Navigator.of(context).pop(FolderChoice(_input.text.trim()));
                 },
-                child: Icon(Icons.add_rounded, size: 20, color: AppColors.cyan),
+                child: Icon(Icons.add_rounded, size: 20, color: p.accent),
               ),
             ],
           ),
@@ -390,19 +390,17 @@ class ConfirmSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const _SheetHandle(),
+        const SheetHandle(),
         Text(title, style: text.headlineSmall),
         const SizedBox(height: 6),
-        Text(
-          message,
-          style: text.bodySmall?.copyWith(color: AppColors.textLow),
-        ),
+        Text(message, style: text.bodySmall?.copyWith(color: p.textTertiary)),
         const SizedBox(height: 22),
         Row(
           children: <Widget>[
@@ -444,20 +442,15 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: EdgeInsets.fromLTRB(12, 7, trailingIcon == null ? 12 : 8, 7),
         decoration: BoxDecoration(
-          color: selected
-              ? AppColors.cyan.withValues(alpha: 0.14)
-              : Colors.white.withValues(alpha: 0.05),
+          color: selected ? p.accentSoft : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected
-                ? AppColors.cyan.withValues(alpha: 0.4)
-                : AppColors.glassBorder,
-          ),
+          border: Border.all(color: selected ? Colors.transparent : p.border),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -465,13 +458,13 @@ class _Chip extends StatelessWidget {
             Text(
               label,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: selected ? AppColors.textHigh : AppColors.textMid,
+                color: selected ? p.accent : p.textSecondary,
                 fontSize: 12,
               ),
             ),
             if (trailingIcon != null) ...<Widget>[
               const SizedBox(width: 5),
-              Icon(trailingIcon, size: 13, color: AppColors.textMid),
+              Icon(trailingIcon, size: 13, color: p.textSecondary),
             ],
           ],
         ),
@@ -493,35 +486,30 @@ class _PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Gradient gradient = danger
-        ? const LinearGradient(
-            colors: <Color>[AppColors.pink, Color(0xFFFF7A5C)],
-          )
-        : AppColors.primaryGradient;
+    final AppPalette p = context.palette;
+    final Color fill = danger ? p.holiday : p.accent;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 50,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(AppTheme.radiusSm + 2),
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: (danger ? AppColors.pink : AppColors.violet).withValues(
-                alpha: 0.42,
+    return Semantics(
+      button: true,
+      child: Material(
+        color: fill,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          child: SizedBox(
+            height: 48,
+            child: Center(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  // White on the red, the accent's own foreground otherwise.
+                  color: danger ? Colors.white : p.onAccent,
+                  fontSize: 15,
+                ),
               ),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
             ),
-          ],
-        ),
-        child: Text(
-          label,
-          style: Theme.of(
-            context,
-          ).textTheme.labelLarge?.copyWith(color: Colors.white, fontSize: 15),
+          ),
         ),
       ),
     );
@@ -536,21 +524,21 @@ class _GhostButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 50,
+        height: 48,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppTheme.radiusSm + 2),
-          border: Border.all(color: AppColors.glassBorderStrong),
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          border: Border.all(color: p.borderStrong),
         ),
         child: Text(
           label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: AppColors.textMid,
-            fontSize: 15,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.labelLarge?.copyWith(color: p.textPrimary, fontSize: 15),
         ),
       ),
     );

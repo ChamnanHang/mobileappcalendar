@@ -57,10 +57,6 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<!-- The app pins ThemeMode.dark, so the launch storyboard and any
-	     system-drawn chrome must not follow a light system setting. -->
-	<key>UIUserInterfaceStyle</key>
-	<string>Dark</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

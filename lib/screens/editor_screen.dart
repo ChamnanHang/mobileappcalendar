@@ -9,9 +9,8 @@ import '../models/note.dart';
 import '../theme/app_colors.dart';
 import '../utils/markdown_controller.dart';
 import '../utils/relative_time.dart';
-import '../widgets/aurora_background.dart';
 import '../widgets/format_toolbar.dart';
-import '../widgets/glass.dart';
+import '../widgets/surface.dart';
 import '../widgets/sheets.dart';
 
 /// Full-screen note editor. Owns a local copy of the note and commits it back
@@ -77,7 +76,7 @@ class _EditorScreenState extends State<EditorScreen> {
   /// typing into the title, the body or a checklist row, where the `TextField`
   /// already owns the text through its controller. Those used to call
   /// `setState` on every keystroke, rebuilding the header, the whole list, the
-  /// accent picker and the blurred format toolbar for a character that changed
+  /// accent picker and the format toolbar for a character that changed
   /// nothing on screen.
   void _update(Note next, {bool immediate = false, bool rebuild = true}) {
     final Note updated = next.copyWith(updatedAt: DateTime.now());
@@ -151,8 +150,8 @@ class _EditorScreenState extends State<EditorScreen> {
   // ---------------------------------------------------------------- actions
 
   Future<void> _openMore() async {
-    final Color accent = AppColors.accentAt(_note.accent);
-    final EditorAction? action = await showGlassSheet<EditorAction>(
+    final Color accent = NoteColors.at(_note.accent);
+    final EditorAction? action = await showAppSheet<EditorAction>(
       context: context,
       builder: (BuildContext context) =>
           NoteOptionsSheet(note: _note, accent: accent),
@@ -176,7 +175,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _editTags() async {
-    final List<String>? tags = await showGlassSheet<List<String>>(
+    final List<String>? tags = await showAppSheet<List<String>>(
       context: context,
       builder: (BuildContext context) => TagEditorSheet(
         selected: _note.tags,
@@ -187,7 +186,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _pickFolder() async {
-    final FolderChoice? choice = await showGlassSheet<FolderChoice>(
+    final FolderChoice? choice = await showAppSheet<FolderChoice>(
       context: context,
       builder: (BuildContext context) => FolderPickerSheet(
         current: _note.folder,
@@ -200,7 +199,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _confirmDelete() async {
-    final bool? confirmed = await showGlassSheet<bool>(
+    final bool? confirmed = await showAppSheet<bool>(
       context: context,
       builder: (BuildContext context) => const ConfirmSheet(
         title: 'Delete this note?',
@@ -229,130 +228,118 @@ class _EditorScreenState extends State<EditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final Color accent = AppColors.accentAt(_note.accent);
+    final Color accent = NoteColors.at(_note.accent);
     final bool isChecklist = _note.kind == NoteKind.checklist;
     final double keyboard = MediaQuery.viewInsetsOf(context).bottom;
 
-    return AuroraBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: SafeArea(
-          child: Column(
-            children: <Widget>[
-              _EditorHeader(
-                note: _note,
-                accent: accent,
-                onBack: _close,
-                onTogglePin: () => _update(
-                  _note.copyWith(pinned: !_note.pinned),
-                  immediate: true,
-                ),
-                onToggleFavorite: () => _update(
-                  _note.copyWith(favorite: !_note.favorite),
-                  immediate: true,
-                ),
-                onMore: _openMore,
+    // A plain themed background: the editor is where people read and type,
+    // so nothing behind the text moves or competes with it.
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: <Widget>[
+            _EditorHeader(
+              note: _note,
+              accent: accent,
+              onBack: _close,
+              onTogglePin: () => _update(
+                _note.copyWith(pinned: !_note.pinned),
+                immediate: true,
               ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  children: <Widget>[
-                    _TitleField(
-                      controller: _titleController,
-                      autofocus: !widget.autofocusBody && _note.title.isEmpty,
-                      onChanged: (String value) =>
-                          _update(_note.copyWith(title: value), rebuild: false),
-                      onSubmitted: () {
-                        if (isChecklist) {
-                          if (_note.items.isNotEmpty) {
-                            _focusFor(_note.items.first).requestFocus();
-                          }
-                        } else {
-                          _bodyFocus.requestFocus();
+              onToggleFavorite: () => _update(
+                _note.copyWith(favorite: !_note.favorite),
+                immediate: true,
+              ),
+              onMore: _openMore,
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                children: <Widget>[
+                  _TitleField(
+                    controller: _titleController,
+                    autofocus: !widget.autofocusBody && _note.title.isEmpty,
+                    onChanged: (String value) =>
+                        _update(_note.copyWith(title: value), rebuild: false),
+                    onSubmitted: () {
+                      if (isChecklist) {
+                        if (_note.items.isNotEmpty) {
+                          _focusFor(_note.items.first).requestFocus();
                         }
-                      },
-                    ),
-                    const SizedBox(height: 6),
-                    _MetaRow(note: _note, accent: accent),
-                    const SizedBox(height: 18),
-                    if (isChecklist)
-                      _ChecklistEditor(
-                        note: _note,
-                        accent: accent,
-                        controllerFor: _controllerFor,
-                        focusFor: _focusFor,
-                        onToggle: _toggleItem,
-                        onTextChanged: (ChecklistItem item, String value) {
-                          _setItems(
-                            _note.items
-                                .map(
-                                  (ChecklistItem i) => i.id == item.id
-                                      ? i.copyWith(text: value)
-                                      : i,
-                                )
-                                .toList(),
-                            rebuild: false,
-                          );
-                        },
-                        onSubmit: (ChecklistItem item) => _addItem(
-                          after: _note.items.indexWhere(
-                            (ChecklistItem i) => i.id == item.id,
-                          ),
-                        ),
-                        onRemove: _removeItem,
-                        onAdd: _addItem,
-                      )
-                    else
-                      _BodyField(
-                        controller: _bodyController,
-                        focusNode: _bodyFocus,
-                        autofocus: widget.autofocusBody,
-                        onChanged: (String value) => _update(
-                          _note.copyWith(body: value),
-                          rebuild: false,
-                        ),
-                      ),
-                    const SizedBox(height: 22),
-                    _TagsRow(
-                      tags: _note.tags,
-                      accent: accent,
-                      onEdit: _editTags,
-                      onRemove: (String tag) => _update(
-                        _note.copyWith(
-                          tags: _note.tags
-                              .where((String t) => t != tag)
-                              .toList(),
-                        ),
-                        immediate: true,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    _AccentPicker(
-                      selected: _note.accent,
-                      onSelect: (int index) => _update(
-                        _note.copyWith(accent: index),
-                        immediate: true,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (!isChecklist)
-                AnimatedPadding(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    0,
-                    16,
-                    keyboard > 0 ? 10 : 16,
+                      } else {
+                        _bodyFocus.requestFocus();
+                      }
+                    },
                   ),
-                  child: FormatToolbar(controller: _bodyController),
-                ),
-            ],
-          ),
+                  const SizedBox(height: 6),
+                  _MetaRow(note: _note, accent: accent),
+                  const SizedBox(height: 18),
+                  if (isChecklist)
+                    _ChecklistEditor(
+                      note: _note,
+                      accent: accent,
+                      controllerFor: _controllerFor,
+                      focusFor: _focusFor,
+                      onToggle: _toggleItem,
+                      onTextChanged: (ChecklistItem item, String value) {
+                        _setItems(
+                          _note.items
+                              .map(
+                                (ChecklistItem i) => i.id == item.id
+                                    ? i.copyWith(text: value)
+                                    : i,
+                              )
+                              .toList(),
+                          rebuild: false,
+                        );
+                      },
+                      onSubmit: (ChecklistItem item) => _addItem(
+                        after: _note.items.indexWhere(
+                          (ChecklistItem i) => i.id == item.id,
+                        ),
+                      ),
+                      onRemove: _removeItem,
+                      onAdd: _addItem,
+                    )
+                  else
+                    _BodyField(
+                      controller: _bodyController,
+                      focusNode: _bodyFocus,
+                      autofocus: widget.autofocusBody,
+                      onChanged: (String value) =>
+                          _update(_note.copyWith(body: value), rebuild: false),
+                    ),
+                  const SizedBox(height: 22),
+                  _TagsRow(
+                    tags: _note.tags,
+                    accent: accent,
+                    onEdit: _editTags,
+                    onRemove: (String tag) => _update(
+                      _note.copyWith(
+                        tags: _note.tags.where((String t) => t != tag).toList(),
+                      ),
+                      immediate: true,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  _AccentPicker(
+                    selected: _note.accent,
+                    onSelect: (int index) =>
+                        _update(_note.copyWith(accent: index), immediate: true),
+                  ),
+                ],
+              ),
+            ),
+            if (!isChecklist)
+              AnimatedPadding(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.fromLTRB(16, 0, 16, keyboard > 0 ? 10 : 16),
+                child: FormatToolbar(controller: _bodyController),
+              ),
+          ],
         ),
       ),
     );
@@ -380,11 +367,12 @@ class _EditorHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
       child: Row(
         children: <Widget>[
-          GlassIconButton(
+          CircleIconButton(
             icon: Icons.arrow_back_rounded,
             tooltip: 'Back',
             onTap: onBack,
@@ -400,7 +388,7 @@ class _EditorHeader extends StatelessWidget {
                 ).textTheme.labelSmall?.copyWith(color: accent, fontSize: 12),
               ),
             ),
-          GlassIconButton(
+          CircleIconButton(
             icon: note.pinned
                 ? Icons.push_pin_rounded
                 : Icons.push_pin_outlined,
@@ -410,17 +398,17 @@ class _EditorHeader extends StatelessWidget {
             onTap: onTogglePin,
           ),
           const SizedBox(width: 8),
-          GlassIconButton(
+          CircleIconButton(
             icon: note.favorite
                 ? Icons.star_rounded
                 : Icons.star_outline_rounded,
             tooltip: note.favorite ? 'Unfavourite' : 'Favourite',
             active: note.favorite,
-            activeColor: AppColors.amber,
+            activeColor: p.holy,
             onTap: onToggleFavorite,
           ),
           const SizedBox(width: 8),
-          GlassIconButton(
+          CircleIconButton(
             icon: Icons.more_horiz_rounded,
             tooltip: 'More',
             onTap: onMore,
@@ -468,6 +456,7 @@ class _MetaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
     final String? folder = note.folder;
 
@@ -475,19 +464,15 @@ class _MetaRow extends StatelessWidget {
       children: <Widget>[
         Text(
           'Edited ${relativeTime(note.updatedAt)}',
-          style: text.labelSmall?.copyWith(color: AppColors.textLow),
+          style: text.labelSmall?.copyWith(color: p.textTertiary),
         ),
         if (folder != null && folder.isNotEmpty) ...<Widget>[
           const SizedBox(width: 8),
-          Icon(
-            Icons.folder_rounded,
-            size: 12,
-            color: accent.withValues(alpha: 0.8),
-          ),
+          Icon(Icons.folder_rounded, size: 12, color: p.textTertiary),
           const SizedBox(width: 4),
           Text(
             folder,
-            style: text.labelSmall?.copyWith(color: AppColors.textMid),
+            style: text.labelSmall?.copyWith(color: p.textSecondary),
           ),
         ],
       ],
@@ -552,6 +537,7 @@ class _ChecklistEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
 
     return Column(
@@ -570,7 +556,7 @@ class _ChecklistEditor extends StatelessWidget {
                     LinearProgressIndicator(
                       value: value,
                       minHeight: 5,
-                      backgroundColor: Colors.white.withValues(alpha: 0.07),
+                      backgroundColor: context.palette.surfaceMuted,
                       valueColor: AlwaysStoppedAnimation<Color>(accent),
                     ),
               ),
@@ -607,9 +593,9 @@ class _ChecklistEditor extends StatelessWidget {
                     textInputAction: TextInputAction.next,
                     textCapitalization: TextCapitalization.sentences,
                     style: text.bodyLarge?.copyWith(
-                      color: item.done ? AppColors.textLow : AppColors.textHigh,
+                      color: item.done ? p.textTertiary : p.textPrimary,
                       decoration: item.done ? TextDecoration.lineThrough : null,
-                      decorationColor: AppColors.textLow,
+                      decorationColor: p.textTertiary,
                     ),
                     decoration: const InputDecoration(hintText: 'List item'),
                   ),
@@ -625,7 +611,7 @@ class _ChecklistEditor extends StatelessWidget {
                       child: Icon(
                         Icons.close_rounded,
                         size: 16,
-                        color: AppColors.textLow,
+                        color: p.textTertiary,
                       ),
                     ),
                   ),
@@ -669,6 +655,7 @@ class _BigTick extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
@@ -676,19 +663,12 @@ class _BigTick extends StatelessWidget {
       height: 21,
       decoration: BoxDecoration(
         color: done ? accent : Colors.transparent,
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(
-          color: done ? accent : AppColors.glassBorderStrong,
-          width: 1.6,
-        ),
-        boxShadow: done
-            ? <BoxShadow>[
-                BoxShadow(color: accent.withValues(alpha: 0.5), blurRadius: 9),
-              ]
-            : null,
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: done ? accent : p.borderStrong, width: 1.6),
       ),
+      // White reads on every note colour; black vanished on the darker ones.
       child: done
-          ? const Icon(Icons.check_rounded, size: 14, color: Colors.black)
+          ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
           : null,
     );
   }
@@ -709,6 +689,7 @@ class _TagsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
 
     return Wrap(
@@ -726,9 +707,8 @@ class _TagsRow extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.fromLTRB(11, 8, 8, 8),
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.12),
+                  color: p.surfaceMuted,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: accent.withValues(alpha: 0.32)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -736,16 +716,12 @@ class _TagsRow extends StatelessWidget {
                     Text(
                       '#$tag',
                       style: text.labelSmall?.copyWith(
-                        color: AppColors.textHigh,
+                        color: p.textPrimary,
                         fontSize: 12,
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Icon(
-                      Icons.close_rounded,
-                      size: 13,
-                      color: AppColors.textMid,
-                    ),
+                    Icon(Icons.close_rounded, size: 13, color: p.textSecondary),
                   ],
                 ),
               ),
@@ -761,17 +737,17 @@ class _TagsRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.glassBorder),
+                border: Border.all(color: p.border),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Icon(Icons.add_rounded, size: 14, color: AppColors.textMid),
+                  Icon(Icons.add_rounded, size: 14, color: p.textSecondary),
                   const SizedBox(width: 4),
                   Text(
                     'Tag',
                     style: text.labelSmall?.copyWith(
-                      color: AppColors.textMid,
+                      color: p.textSecondary,
                       fontSize: 12,
                     ),
                   ),
@@ -793,20 +769,21 @@ class _AccentPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return Row(
       children: <Widget>[
         Text(
           'Colour',
           style: Theme.of(
             context,
-          ).textTheme.labelSmall?.copyWith(color: AppColors.textLow),
+          ).textTheme.labelSmall?.copyWith(color: p.textTertiary),
         ),
         const SizedBox(width: 6),
-        for (int i = 0; i < AppColors.accents.length; i++)
+        for (int i = 0; i < NoteColors.all.length; i++)
           Semantics(
             button: true,
             selected: selected == i,
-            label: AppColors.accentNames[i],
+            label: NoteColors.names[i],
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () {
@@ -817,27 +794,25 @@ class _AccentPicker extends StatelessWidget {
               child: TapTarget(
                 size: 44,
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
+                  duration: const Duration(milliseconds: 160),
                   curve: Curves.easeOut,
-                  width: selected == i ? 26 : 20,
-                  height: selected == i ? 26 : 20,
+                  width: 28,
+                  height: 28,
+                  padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
-                    color: AppColors.accents[i],
                     shape: BoxShape.circle,
+                    // A ring in the text colour marks the choice. The old
+                    // white ring disappeared against the light background.
                     border: Border.all(
-                      color: selected == i
-                          ? Colors.white.withValues(alpha: 0.9)
-                          : Colors.transparent,
+                      color: selected == i ? p.textPrimary : Colors.transparent,
                       width: 2,
                     ),
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: AppColors.accents[i].withValues(
-                          alpha: selected == i ? 0.65 : 0.3,
-                        ),
-                        blurRadius: selected == i ? 12 : 6,
-                      ),
-                    ],
+                  ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: NoteColors.all[i],
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
               ),

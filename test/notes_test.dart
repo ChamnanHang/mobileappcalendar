@@ -306,15 +306,17 @@ void main() {
   });
 
   group('app', () {
-    // The aurora background animates forever, so `pumpAndSettle` would never
-    // return — advance a fixed number of frames instead.
+    // The app opens on the calendar; these tests are about the note list.
     Future<void> boot(WidgetTester tester) async {
       await tester.pumpWidget(NotedApp(store: MemoryNoteStore()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.text('Notes'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
     }
 
-    testWidgets('boots to the note list', (WidgetTester tester) async {
+    testWidgets('shows the note list', (WidgetTester tester) async {
       await boot(tester);
 
       expect(find.text('Noted'), findsOneWidget);

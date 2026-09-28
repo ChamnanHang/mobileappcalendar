@@ -8,13 +8,15 @@ import '../data/khmer_lunar.dart';
 import '../data/khmer_month.dart';
 import '../data/notes_controller.dart';
 import '../data/notes_scope.dart';
+import '../data/reminders.dart';
 import '../models/note.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/date_keys.dart';
 import '../utils/khmer_text.dart';
-import '../widgets/glass.dart';
+import '../widgets/surface.dart';
 import '../widgets/month_year_picker.dart';
+import '../widgets/reminder_sheet.dart';
 import '../widgets/sheets.dart';
 import 'editor_screen.dart';
 
@@ -134,7 +136,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   /// Jump straight to any month/year rather than stepping one at a time.
   Future<void> _pickMonth() async {
-    final DateTime? chosen = await showGlassSheet<DateTime>(
+    final DateTime? chosen = await showAppSheet<DateTime>(
       context: context,
       builder: (BuildContext context) => MonthYearPicker(initial: _month),
     );
@@ -145,6 +147,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final NotesController notes = NotesScope.of(context);
+    final MorningReminders? reminders = RemindersScope.maybeOf(context);
     _refreshNoteIndex(notes);
 
     final List<Note> notesOnSelected =
@@ -158,10 +161,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final bool computed = _data.computed;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 120),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: <Widget>[
             _MonthHeader(
               month: _month,
@@ -170,6 +172,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
               onNext: () => _shiftMonth(1),
               onToday: _goToday,
               onPickMonth: _pickMonth,
+              reminderOn: reminders?.settings.enabled ?? false,
+              onReminder: reminders != null && reminders.supported
+                  ? () => _openReminders(reminders)
+                  : null,
             ),
             const SizedBox(height: 16),
             if (_data.error != null) ...<Widget>[
@@ -209,6 +215,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
+  Future<void> _openReminders(MorningReminders reminders) async {
+    await showAppSheet<void>(
+      context: context,
+      builder: (BuildContext context) => ReminderSheet(reminders: reminders),
+    );
+  }
+
   Future<void> _openNote(Note note) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -227,11 +240,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 }
 
-/// Wraps the grid in a horizontal fling gesture and slides between months.
+/// Wraps the grid in a horizontal swipe gesture and slides between months.
 ///
 /// Stepping a calendar with only the two chevrons is unusual on a phone;
 /// swiping is what people reach for first.
-class _SwipeableMonth extends StatelessWidget {
+class _SwipeableMonth extends StatefulWidget {
   const _SwipeableMonth({
     required this.month,
     required this.direction,
@@ -239,10 +252,19 @@ class _SwipeableMonth extends StatelessWidget {
     required this.child,
   });
 
-  /// Velocity past which a drag counts as a month change, in logical pixels
-  /// per second. Low enough to feel responsive, high enough that a vertical
-  /// scroll with a little sideways drift does not trigger it.
-  static const double _flingThreshold = 220;
+  /// A flick past this speed changes month regardless of how far it travelled,
+  /// in logical pixels per second. Low enough to feel responsive, high enough
+  /// that a vertical scroll with a little sideways drift does not trigger it.
+  static const double flingVelocity = 220;
+
+  /// A slow drag past this fraction of the grid's width also changes month.
+  ///
+  /// Velocity alone is not enough to gate on. `DragEndDetails.primaryVelocity`
+  /// is zero whenever the velocity tracker cannot form an estimate — a drag
+  /// that pauses before release, some assistive-input paths, and synthetic
+  /// events — and a deliberate drag halfway across the screen that then does
+  /// nothing feels broken. Distance is the fallback every carousel uses.
+  static const double minDragFraction = 0.22;
 
   final DateTime month;
   final int direction;
@@ -250,16 +272,51 @@ class _SwipeableMonth extends StatelessWidget {
   final Widget child;
 
   @override
+  State<_SwipeableMonth> createState() => _SwipeableMonthState();
+}
+
+class _SwipeableMonthState extends State<_SwipeableMonth> {
+  /// Accumulated horizontal travel of the drag in progress.
+  double _dragDx = 0;
+
+  void _onStart(DragStartDetails _) => _dragDx = 0;
+
+  void _onUpdate(DragUpdateDetails details) =>
+      _dragDx += details.primaryDelta ?? 0;
+
+  void _onEnd(DragEndDetails details) {
+    final double travelled = _dragDx;
+    _dragDx = 0;
+
+    final double velocity = details.primaryVelocity ?? 0;
+    // Dragging right (positive) reveals the previous month.
+    if (velocity.abs() >= _SwipeableMonth.flingVelocity) {
+      widget.onSwipe(velocity > 0 ? -1 : 1);
+      return;
+    }
+
+    final double width = context.size?.width ?? 0;
+    final double minDx = width * _SwipeableMonth.minDragFraction;
+    if (minDx > 0 && travelled.abs() >= minDx) {
+      widget.onSwipe(travelled > 0 ? -1 : 1);
+    }
+  }
+
+  void _onCancel() => _dragDx = 0;
+
+  @override
   Widget build(BuildContext context) {
+    final ValueKey<String> currentKey = ValueKey<String>(
+      '${widget.month.year}-${widget.month.month}',
+    );
+
     return GestureDetector(
       // Only claims horizontal drags, so the surrounding vertical ListView
       // keeps working normally.
-      onHorizontalDragEnd: (DragEndDetails details) {
-        final double velocity = details.primaryVelocity ?? 0;
-        if (velocity.abs() < _flingThreshold) return;
-        // Dragging right (positive velocity) reveals the previous month.
-        onSwipe(velocity > 0 ? -1 : 1);
-      },
+      onHorizontalDragStart: _onStart,
+      onHorizontalDragUpdate: _onUpdate,
+      onHorizontalDragEnd: _onEnd,
+      onHorizontalDragCancel: _onCancel,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 260),
         switchInCurve: Curves.easeOutCubic,
@@ -271,9 +328,10 @@ class _SwipeableMonth extends StatelessWidget {
           children: <Widget>[...previous, ?current],
         ),
         transitionBuilder: (Widget child, Animation<double> animation) {
-          final bool incoming =
-              child.key == ValueKey<String>('${month.year}-${month.month}');
-          final double from = incoming ? direction * 0.12 : direction * -0.12;
+          final bool incoming = child.key == currentKey;
+          final double from = incoming
+              ? widget.direction * 0.12
+              : widget.direction * -0.12;
           return FadeTransition(
             opacity: animation,
             child: SlideTransition(
@@ -285,7 +343,7 @@ class _SwipeableMonth extends StatelessWidget {
             ),
           );
         },
-        child: child,
+        child: widget.child,
       ),
     );
   }
@@ -301,6 +359,8 @@ class _MonthHeader extends StatelessWidget {
     required this.onNext,
     required this.onToday,
     required this.onPickMonth,
+    this.reminderOn = false,
+    this.onReminder,
   });
 
   final DateTime month;
@@ -310,89 +370,112 @@ class _MonthHeader extends StatelessWidget {
   final VoidCallback onToday;
   final VoidCallback onPickMonth;
 
+  /// Whether the morning reminder is on, which fills the bell.
+  final bool reminderOn;
+
+  /// Opens the reminder settings; the bell is hidden when null.
+  final VoidCallback? onReminder;
+
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
 
-    return Row(
+    final Widget buttons = Row(
+      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Expanded(
-          child: Semantics(
-            button: true,
-            label: 'Change month, currently ${_englishMonth(month)}',
-            excludeSemantics: true,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onPickMonth,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
+        // No gaps between the buttons: each 40dp circle already sits in a 48dp
+        // touch target, and the Khmer month name needs the width.
+        if (onReminder != null)
+          CircleIconButton(
+            icon: reminderOn
+                ? Icons.notifications_active_rounded
+                : Icons.notifications_none_rounded,
+            tooltip: reminderOn
+                ? 'Morning reminder, on'
+                : 'Morning reminder, off',
+            active: reminderOn,
+            onTap: onReminder,
+          ),
+        CircleIconButton(
+          icon: Icons.today_rounded,
+          tooltip: 'Today',
+          onTap: onToday,
+        ),
+        CircleIconButton(
+          icon: Icons.chevron_left_rounded,
+          tooltip: 'Previous month',
+          onTap: onPrev,
+        ),
+        CircleIconButton(
+          icon: Icons.chevron_right_rounded,
+          tooltip: 'Next month',
+          onTap: onNext,
+        ),
+      ],
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: 'Change month, currently ${_englishMonth(month)}',
+                excludeSemantics: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onPickMonth,
+                  child: Row(
                     children: <Widget>[
                       Flexible(
-                        child: ShaderMask(
-                          shaderCallback: (Rect bounds) =>
-                              AppColors.primaryGradient.createShader(bounds),
-                          blendMode: BlendMode.srcIn,
-                          child: Text(
-                            '${gregorianMonthName(month.month)} ${toKhmerDigits(month.year)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.headlineMedium?.copyWith(
-                              color: Colors.white,
-                            ),
-                          ),
+                        child: Text(
+                          '${gregorianMonthName(month.month)} ${toKhmerDigits(month.year)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.headlineMedium,
                         ),
                       ),
                       const SizedBox(width: 4),
                       Icon(
                         Icons.expand_more_rounded,
                         size: 20,
-                        color: AppColors.textMid,
+                        color: p.textSecondary,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 2),
-                  // One rich text rather than a Row: a Row of fixed-width Texts
-                  // cannot shrink and overflows on narrow phones.
-                  Text.rich(
-                    TextSpan(
-                      children: <InlineSpan>[
-                        TextSpan(text: _englishMonth(month)),
-                        if (beYear != null) ...<InlineSpan>[
-                          const TextSpan(text: '  ·  '),
-                          TextSpan(
-                            text: 'ពុទ្ធសករាជ ${toKhmerDigits(beYear!)}',
-                            style: const TextStyle(color: AppColors.cyan),
-                          ),
-                        ],
-                      ],
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.labelSmall?.copyWith(color: AppColors.textLow),
-                  ),
-                ],
+                ),
               ),
             ),
+            buttons,
+          ],
+        ),
+        // Below the buttons rather than beside them, so the Buddhist-era year
+        // gets the full width instead of being cut off. Also opens the picker;
+        // the title's label already tells a screen reader which month it is.
+        ExcludeSemantics(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onPickMonth,
+            // One rich text rather than a Row: a Row of fixed-width Texts
+            // cannot shrink and overflows on narrow phones.
+            child: Text.rich(
+              TextSpan(
+                children: <InlineSpan>[
+                  TextSpan(text: _englishMonth(month)),
+                  if (beYear != null) ...<InlineSpan>[
+                    const TextSpan(text: '  ·  '),
+                    TextSpan(text: 'ពុទ្ធសករាជ ${toKhmerDigits(beYear!)}'),
+                  ],
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: text.labelSmall?.copyWith(color: p.textTertiary),
+            ),
           ),
-        ),
-        GlassIconButton(
-          icon: Icons.today_rounded,
-          tooltip: 'Today',
-          onTap: onToday,
-        ),
-        const SizedBox(width: 8),
-        GlassIconButton(
-          icon: Icons.chevron_left_rounded,
-          tooltip: 'Previous month',
-          onTap: onPrev,
-        ),
-        const SizedBox(width: 8),
-        GlassIconButton(
-          icon: Icons.chevron_right_rounded,
-          tooltip: 'Next month',
-          onTap: onNext,
         ),
       ],
     );
@@ -423,6 +506,7 @@ class _WeekdayRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return Row(
       children: <Widget>[
         for (int i = 0; i < weekdayInitials.length; i++)
@@ -431,7 +515,7 @@ class _WeekdayRow extends StatelessWidget {
               child: Text(
                 weekdayInitials[i],
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: i == 0 ? AppColors.pink : AppColors.textLow,
+                  color: i == 0 ? p.holiday : p.textTertiary,
                   fontSize: 11.5,
                 ),
               ),
@@ -545,17 +629,25 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
     final bool isSunday = date.weekday == DateTime.sunday;
     final bool isPublicHoliday = _isPublicHoliday;
 
-    final Color accent = isPublicHoliday
-        ? AppColors.pink
-        : (isToday ? AppColors.violet : AppColors.cyan);
+    final Color dayColor;
+    if (!inMonth) {
+      dayColor = p.textTertiary.withValues(alpha: 0.5);
+    } else if (isToday) {
+      dayColor = p.onAccent;
+    } else if (isSunday || isPublicHoliday) {
+      dayColor = p.holiday;
+    } else {
+      dayColor = p.textPrimary;
+    }
 
-    final Color dayColor = !inMonth
-        ? AppColors.textHigh.withValues(alpha: 0.20)
-        : (isSunday ? AppColors.pink : AppColors.textHigh);
+    final Color lunarColor = !inMonth
+        ? p.textTertiary.withValues(alpha: 0.4)
+        : (isHolyDay ? p.holy : p.textTertiary);
 
     return Semantics(
       button: true,
@@ -563,64 +655,42 @@ class _DayCell extends StatelessWidget {
       label: _semanticLabel,
       excludeSemantics: true,
       child: Padding(
-        padding: const EdgeInsets.all(2.5),
+        padding: const EdgeInsets.all(2),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: AspectRatio(
             aspectRatio: 0.82,
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
+              duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,
               decoration: BoxDecoration(
-                gradient: isToday
-                    ? LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: <Color>[
-                          AppColors.violet.withValues(alpha: 0.34),
-                          AppColors.cyan.withValues(alpha: 0.18),
-                        ],
-                      )
-                    : null,
-                color: isToday
-                    ? null
-                    : (isSelected
-                          ? accent.withValues(alpha: 0.13)
-                          : Colors.white.withValues(
-                              alpha: inMonth ? 0.035 : 0.012,
-                            )),
-                borderRadius: BorderRadius.circular(13),
-                border: Border.all(
-                  color: isSelected
-                      ? accent.withValues(alpha: 0.75)
-                      : (isToday
-                            ? AppColors.violet.withValues(alpha: 0.55)
-                            : AppColors.glassBorder),
-                  width: isSelected ? 1.6 : 1,
-                ),
-                boxShadow: isSelected || isToday
-                    ? <BoxShadow>[
-                        BoxShadow(
-                          color: accent.withValues(alpha: 0.28),
-                          blurRadius: 14,
-                          offset: const Offset(0, 4),
-                        ),
-                      ]
-                    : null,
+                color: isSelected ? p.accentSoft : Colors.transparent,
+                borderRadius: BorderRadius.circular(AppTheme.radiusSm + 2),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  Text(
-                    '${date.day}',
-                    style: text.titleMedium?.copyWith(
-                      color: dayColor,
-                      fontSize: 15.5,
-                      fontWeight: isToday ? FontWeight.w700 : FontWeight.w600,
+                  Container(
+                    width: 30,
+                    height: 30,
+                    alignment: Alignment.center,
+                    decoration: isToday
+                        ? BoxDecoration(color: p.accent, shape: BoxShape.circle)
+                        : null,
+                    child: Text(
+                      '${date.day}',
+                      maxLines: 1,
+                      style: text.titleMedium?.copyWith(
+                        color: dayColor,
+                        fontSize: 15,
+                        height: 1.1,
+                        fontWeight: isToday || isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 1),
                   SizedBox(
                     height: 13,
                     child: lunar == null
@@ -631,25 +701,22 @@ class _DayCell extends StatelessWidget {
                             overflow: TextOverflow.clip,
                             style: text.labelSmall?.copyWith(
                               fontSize: 9.5,
-                              height: 1.1,
-                              color: !inMonth
-                                  ? AppColors.textHigh.withValues(alpha: 0.16)
-                                  : (isHolyDay
-                                        ? AppColors.amber
-                                        : AppColors.textMid),
+                              height: 1.2,
+                              color: lunarColor,
                             ),
                           ),
                   ),
-                  const SizedBox(height: 2),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      if (isHolyDay && inMonth)
-                        const _Dot(color: AppColors.amber),
-                      if (isPublicHoliday && inMonth)
-                        const _Dot(color: AppColors.pink),
-                      if (hasNote && inMonth) const _Dot(color: AppColors.lime),
-                    ],
+                  const SizedBox(height: 3),
+                  SizedBox(
+                    height: 4,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        if (isHolyDay && inMonth) _Dot(color: p.holy),
+                        if (isPublicHoliday && inMonth) _Dot(color: p.holiday),
+                        if (hasNote && inMonth) _Dot(color: p.accent),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -702,14 +769,11 @@ class _DayDetailPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
 
-    return GlassPanel(
+    return SurfaceCard(
       radius: AppTheme.radiusLg,
-      blur: 22,
-      glow: holidays.any((KhmerHoliday h) => h.isPublicHoliday)
-          ? AppColors.pink
-          : AppColors.cyan,
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -724,7 +788,7 @@ class _DayDetailPanel extends StatelessWidget {
                     Text('ថ្ងៃ${weekdayName(date)}', style: text.headlineSmall),
                     Text(
                       '${date.day} ${gregorianMonthName(date.month)} ${toKhmerDigits(date.year)}',
-                      style: text.bodySmall?.copyWith(color: AppColors.textMid),
+                      style: text.bodySmall?.copyWith(color: p.textSecondary),
                     ),
                   ],
                 ),
@@ -735,13 +799,11 @@ class _DayDetailPanel extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       lunarDayToken(lunar!.day),
-                      style: text.headlineSmall?.copyWith(
-                        color: AppColors.cyan,
-                      ),
+                      style: text.headlineSmall?.copyWith(color: p.accent),
                     ),
                     Text(
                       'ខែ${lunarMonthName(lunar!.month)}',
-                      style: text.bodySmall?.copyWith(color: AppColors.textMid),
+                      style: text.bodySmall?.copyWith(color: p.textSecondary),
                     ),
                   ],
                 ),
@@ -758,10 +820,10 @@ class _DayDetailPanel extends StatelessWidget {
               runSpacing: 8,
               children: <Widget>[
                 if (isHolyDay)
-                  const _Badge(
+                  _Badge(
                     icon: Icons.brightness_2_rounded,
                     label: 'ថ្ងៃសីល',
-                    color: AppColors.amber,
+                    color: p.holy,
                   ),
                 for (final KhmerHoliday holiday in holidays)
                   _Badge(
@@ -770,8 +832,8 @@ class _DayDetailPanel extends StatelessWidget {
                         : Icons.local_florist_rounded,
                     label: holiday.khmer,
                     color: holiday.isPublicHoliday
-                        ? AppColors.pink
-                        : AppColors.textMid,
+                        ? p.holiday
+                        : p.textSecondary,
                   ),
               ],
             ),
@@ -782,26 +844,26 @@ class _DayDetailPanel extends StatelessWidget {
                   holiday.isPublicHoliday
                       ? '${holiday.english} · public holiday'
                       : holiday.english,
-                  style: text.labelSmall?.copyWith(color: AppColors.textLow),
+                  style: text.labelSmall?.copyWith(color: p.textTertiary),
                 ),
               ),
           ],
           const SizedBox(height: 18),
-          Divider(color: AppColors.glassBorder, height: 1),
+          Divider(color: p.border, height: 1),
           const SizedBox(height: 14),
           Row(
             children: <Widget>[
               Icon(
                 Icons.sticky_note_2_outlined,
                 size: 15,
-                color: AppColors.textLow,
+                color: p.textTertiary,
               ),
               const SizedBox(width: 7),
               Text(
                 notes.isEmpty
                     ? 'No notes on this day'
                     : '${notes.length} note${notes.length == 1 ? '' : 's'} on this day',
-                style: text.labelSmall?.copyWith(color: AppColors.textLow),
+                style: text.labelSmall?.copyWith(color: p.textTertiary),
               ),
             ],
           ),
@@ -826,7 +888,7 @@ class _DayDetailPanel extends StatelessWidget {
                           height: 26,
                           margin: const EdgeInsets.only(right: 10),
                           decoration: BoxDecoration(
-                            color: AppColors.accentAt(note.accent),
+                            color: NoteColors.at(note.accent),
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),
@@ -848,7 +910,7 @@ class _DayDetailPanel extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: text.labelSmall?.copyWith(
-                                    color: AppColors.textLow,
+                                    color: p.textTertiary,
                                   ),
                                 ),
                             ],
@@ -857,7 +919,7 @@ class _DayDetailPanel extends StatelessWidget {
                         Icon(
                           Icons.chevron_right_rounded,
                           size: 18,
-                          color: AppColors.textLow,
+                          color: p.textTertiary,
                         ),
                       ],
                     ),
@@ -878,11 +940,11 @@ class _DayDetailPanel extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Row(
                     children: <Widget>[
-                      Icon(Icons.add_rounded, size: 17, color: AppColors.cyan),
+                      Icon(Icons.add_rounded, size: 17, color: p.accent),
                       const SizedBox(width: 8),
                       Text(
                         'New note for today',
-                        style: text.bodyMedium?.copyWith(color: AppColors.cyan),
+                        style: text.bodyMedium?.copyWith(color: p.accent),
                       ),
                     ],
                   ),
@@ -905,12 +967,12 @@ class _Badge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.38)),
+        color: p.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -920,7 +982,7 @@ class _Badge extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textHigh,
+              color: p.textPrimary,
               fontSize: 12,
             ),
           ),
@@ -937,19 +999,19 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
       decoration: BoxDecoration(
-        color: AppColors.pink.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(AppTheme.radiusSm + 2),
-        border: Border.all(color: AppColors.pink.withValues(alpha: 0.32)),
+        color: p.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(Icons.error_outline_rounded, size: 17, color: AppColors.pink),
+          Icon(Icons.error_outline_rounded, size: 17, color: p.holiday),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -959,7 +1021,7 @@ class _ErrorBanner extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   message,
-                  style: text.labelSmall?.copyWith(color: AppColors.textLow),
+                  style: text.labelSmall?.copyWith(color: p.textTertiary),
                 ),
               ],
             ),

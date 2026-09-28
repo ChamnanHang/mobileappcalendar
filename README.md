@@ -1,9 +1,11 @@
 # Noted
 
-A modern, offline-first notes app built with Flutter — dark glassmorphic UI, neon accents, and a
-live markdown editor.
+An offline-first Khmer lunar calendar and notes app built with Flutter — a quiet, minimal UI that
+follows the system light/dark setting, and a live markdown editor.
 
 ## Features
+
+The app opens on the calendar; notes are the second tab.
 
 - **Notes & checklists** — two note types; checklists show a progress bar and tickable items you can
   toggle straight from the home grid.
@@ -17,6 +19,9 @@ live markdown editor.
 - **Khmer lunar calendar** — a month grid showing each day's lunar date (កើត / រោច), Buddhist holy
   days, Khmer New Year, and which days already have notes. Swipe sideways to change month. Computed
   on-device. See below.
+- **Morning reminder** — an optional notification each morning (7:00 by default, any time you
+  pick) with today's Khmer lunar date and the holy days and holidays falling today and tomorrow.
+  Turned on from the bell on the calendar. See below.
 - **Fully offline** — notes are stored on the device and the calendar is computed locally. No
   account, no server, no network calls at all.
 - **Accessible** — every control has a screen-reader label and a 44–48dp touch target, calendar
@@ -25,22 +30,26 @@ live markdown editor.
 
 ## Design
 
-Dark aurora background (animated neon blobs painted on a canvas), frosted-glass panels, six
-selectable per-note accent colours, and spring-loaded micro-interactions. The type scale uses the
-platform system face (SF Pro / Roboto), so nothing is fetched at runtime.
+Minimal and flat: plain surfaces with hairline borders, no shadows, blur or gradients, and a single
+indigo accent. Colour is kept for meaning — red for Sundays and public holidays, amber for Buddhist
+holy days, the accent for today and the current selection — plus six per-note tag colours chosen
+to read on both backgrounds. The type scale uses the platform system face (SF Pro / Roboto), so
+nothing is fetched at runtime.
 
-The app is dark-only: `themeMode` is pinned, and both launch screens use `AppColors.bg` so there is
-no white flash on a light-mode device.
+Light and dark both ship, and the app follows the system setting (`ThemeMode.system`). Colours live
+in one `AppPalette` theme extension ([lib/theme/app_colors.dart](lib/theme/app_colors.dart)), read
+with `context.palette`; text and icon colours meet WCAG AA (4.5:1) on every surface they sit on in
+both modes. The native launch screens have a light and a dark variant too — `values-night/` on
+Android, a `LaunchBackground` colour set with a dark appearance on iOS — so there is no flash
+between the splash and the first Flutter frame in either mode.
 
 ### Where the frames go
 
 A few deliberate choices, because this is the kind of UI that gets slow quietly:
 
-- **Blur is rationed.** `BackdropFilter` costs a `saveLayer` plus a gaussian pass over the pixels
-  behind it, per panel, per frame. The chrome that sits over scrolling content — nav bar, sheets,
-  search field, toolbar — pays it. Note cards do not (`GlassPanel(blurred: false)`): dozens are on
-  screen at once, and what is behind them is the aurora, an already-smooth gradient, so blurring it
-  returns very nearly the same pixels.
+- **Nothing expensive to paint.** No `BackdropFilter`, no shadows, no animated background: every
+  surface is a solid fill and a 1px border. An idle screen schedules no frames at all, which a test
+  asserts (`pumpAndSettle` returns).
 - **The grid is lazy.** Notes are chunked into a `SliverList` rather than built all at once, so
   build cost tracks the viewport, not the library size. Each card is a `RepaintBoundary`.
 - **Derived state is computed once per change, not once per build.** `visibleNotes`, `allTags`,
@@ -50,8 +59,8 @@ A few deliberate choices, because this is the kind of UI that gets slow quietly:
   checklist edits update the model without `setState`; structural edits still rebuild.
 - **The calendar caches months.** `KhmerMonthCache` is a small LRU, with the neighbouring months
   warmed in a microtask so an arrow tap or a swipe lands on a grid that already exists.
-- **The aurora stops when asked.** It respects reduce-motion, and instances share a phase so the
-  background does not jump when the editor fades in over the list.
+- **The notes tab is built on first visit.** The app opens on the calendar, so the note grid is
+  not laid out until someone actually switches to it.
 
 ## Khmer calendar
 
@@ -116,6 +125,26 @@ Khmer glyphs rely on the platform font: Android and iOS carry Khmer system fonts
 fetches a Noto fallback at runtime, so the first paint on web can briefly show ▯▯▯ boxes. Bundling
 `NotoSansKhmer` as an asset would remove that dependency.
 
+## Morning reminder
+
+Neither Android nor iOS runs app code at 7am to work out what a notification should say, and a
+repeating notification can only repeat the same text. The calendar is deterministic, though, so
+[lib/data/reminders.dart](lib/data/reminders.dart) computes each morning's text ahead of time
+([lib/data/morning_digest.dart](lib/data/morning_digest.dart)) and schedules the next 60 mornings
+as separate one-shot local notifications. Every return to the app rolls that window forward, so it
+only runs dry if the app goes unopened for two months. Sixty stays under iOS's cap of 64 pending
+notifications per app.
+
+- **Opt-in.** Off until the user turns it on, and the notification permission is requested at that
+  moment, not at launch. A refusal leaves it off and says where to change it.
+- **On time.** On Android below 14 the reminders use exact alarms, which need no prompt there. Android
+  14 denies exact alarms by default; the reminder then arrives within an hour, and the sheet offers
+  to open the setting that allows exact timing. `USE_EXACT_ALARM` is not used, because Play limits
+  it to alarm-clock and calendar apps and requires a declaration.
+- **Survives restarts.** A boot receiver re-registers pending reminders after a reboot or an app
+  update. The schedule is also rebuilt at every launch, which picks up a time-zone change.
+- **Offline.** Nothing leaves the device: no push service, no server, no account.
+
 ## Running it
 
 ```bash
@@ -136,21 +165,20 @@ Run `flutter doctor` to confirm what's missing.
 flutter test
 ```
 
-98 tests cover the notes controller (sorting, filtering, search, archive, undo, cache invalidation,
+128 tests cover the notes controller (sorting, filtering, search, archive, undo, cache invalidation,
 save durability), JSON persistence round-trips, the markdown helpers, the `Note` derived-state
 caches, the Khmer lunar algorithm (see the table above), the month cache and its LRU eviction, and
-widget tests for boot / open / search / calendar / month swipe / the expanding FAB / reduce-motion.
-
-> The aurora background animates continuously, so widget tests advance frames with
-> `tester.pump(duration)` — `pumpAndSettle` would never return. The one exception is the
-> reduce-motion test, which asserts exactly that: with animations disabled the tree settles.
+widget tests for boot / open / search / calendar / month swipe / the expanding FAB / tab order,
+plus one that asserts the app settles — nothing animates forever. The morning reminder is covered
+from the text of each digest, through the 60-day plan and the controller's permission and
+rescheduling rules against a fake scheduler, to the settings sheet.
 
 ## Layout
 
 ```
 lib/
-  main.dart                     entry point + system chrome
-  app.dart                      NotedApp, injectable NoteStore
+  main.dart                     entry point, error handling
+  app.dart                      NotedApp, injectable NoteStore and reminder scheduler
   models/note.dart              Note, ChecklistItem, NoteKind
   data/
     note_store.dart             NoteStore interface, SharedPreferences + in-memory impls
@@ -158,17 +186,20 @@ lib/
     notes_scope.dart            InheritedNotifier wiring
     khmer_lunar.dart            the lunar calendar algorithm (pure Dart, no deps)
     khmer_month.dart            one month's computed grid, plus an LRU cache
+    morning_digest.dart         the text of one morning's reminder
+    reminders.dart              reminder settings, the 60-day plan, MorningReminders controller
+    local_notification_scheduler.dart  flutter_local_notifications + time zones
   screens/
     home_screen.dart            grid, search, filters, expanding FAB
     editor_screen.dart          title/body/checklist editing, options sheets
     calendar_screen.dart        month grid + selected-day panel
-  theme/                        colours + ThemeData
+  theme/                        AppPalette (light + dark) + ThemeData
   utils/
     markdown_controller.dart    live-styling TextEditingController + toolbar helpers
     markdown_text.dart          stripMarkdown, Flutter-free so models can use it
     khmer_text.dart             Khmer numerals, month/weekday/animal/era names
     date_keys.dart, relative_time.dart
-  widgets/                      glass panels, aurora background, cards, sheets, nav bar
+  widgets/                      surfaces, cards, sheets, reminder sheet, nav bar
 ```
 
 ## Storage note

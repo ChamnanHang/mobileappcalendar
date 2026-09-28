@@ -8,7 +8,7 @@ import '../models/note.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/empty_state.dart';
-import '../widgets/glass.dart';
+import '../widgets/surface.dart';
 import '../widgets/note_card.dart';
 import '../widgets/sheets.dart';
 import 'editor_screen.dart';
@@ -80,23 +80,23 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _quickActions(Note note) async {
     HapticFeedback.mediumImpact();
     final NotesController notes = NotesScope.read(context);
-    final EditorAction? action = await showGlassSheet<EditorAction>(
+    final EditorAction? action = await showAppSheet<EditorAction>(
       context: context,
       builder: (BuildContext context) =>
-          NoteOptionsSheet(note: note, accent: AppColors.accentAt(note.accent)),
+          NoteOptionsSheet(note: note, accent: NoteColors.at(note.accent)),
     );
     if (action == null || !mounted) return;
 
     switch (action) {
       case EditorAction.tags:
-        final List<String>? tags = await showGlassSheet<List<String>>(
+        final List<String>? tags = await showAppSheet<List<String>>(
           context: context,
           builder: (BuildContext context) =>
               TagEditorSheet(selected: note.tags, suggestions: notes.allTags),
         );
         if (tags != null) notes.upsert(note.copyWith(tags: tags));
       case EditorAction.folder:
-        final FolderChoice? choice = await showGlassSheet<FolderChoice>(
+        final FolderChoice? choice = await showAppSheet<FolderChoice>(
           context: context,
           builder: (BuildContext context) => FolderPickerSheet(
             current: note.folder,
@@ -107,7 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case EditorAction.archive:
         notes.setArchived(note.id, !note.archived);
       case EditorAction.delete:
-        final bool? ok = await showGlassSheet<bool>(
+        final bool? ok = await showAppSheet<bool>(
           context: context,
           builder: (BuildContext context) => const ConfirmSheet(
             title: 'Delete this note?',
@@ -132,6 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _snack(String message, {VoidCallback? onUndo}) {
+    final AppPalette p = context.palette;
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
@@ -143,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ? null
               : SnackBarAction(
                   label: 'Undo',
-                  textColor: AppColors.cyan,
+                  textColor: p.accent,
                   onPressed: onUndo,
                 ),
         ),
@@ -165,9 +166,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ? visible.where((Note n) => !n.pinned).toList()
         : visible;
 
-    // The aurora background lives in AppShell so it survives tab switches.
     return Scaffold(
-      backgroundColor: Colors.transparent,
       floatingActionButton: _ExpandingFab(
         open: _fabOpen,
         onNewNote: () => _create(NoteKind.text),
@@ -268,7 +267,6 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.search_off_rounded,
         title: 'Nothing found',
         message: 'Try a different word, or clear the filters above.',
-        accent: AppColors.cyan,
       );
     }
     return switch (notes.filter) {
@@ -276,13 +274,11 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.archive_outlined,
         title: 'Archive is empty',
         message: 'Swipe a note sideways to tuck it away here.',
-        accent: AppColors.blue,
       ),
       NoteFilter.favorites => const EmptyState(
         icon: Icons.star_outline_rounded,
         title: 'No favourites yet',
         message: 'Tap the star on a note to keep it close.',
-        accent: AppColors.amber,
       ),
       NoteFilter.all => const EmptyState(
         icon: Icons.edit_note_rounded,
@@ -357,6 +353,7 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
     final String label = switch (filter) {
       NoteFilter.all => count == 1 ? '1 note' : '$count notes',
@@ -366,51 +363,13 @@ class _Header extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: AppColors.violet.withValues(alpha: 0.5),
-                  blurRadius: 18,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.bolt_rounded,
-              size: 22,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                ShaderMask(
-                  shaderCallback: (Rect bounds) =>
-                      AppColors.primaryGradient.createShader(bounds),
-                  blendMode: BlendMode.srcIn,
-                  child: Text(
-                    'Noted',
-                    style: text.headlineMedium?.copyWith(color: Colors.white),
-                  ),
-                ),
-                Text(
-                  label,
-                  style: text.labelSmall?.copyWith(color: AppColors.textLow),
-                ),
-              ],
-            ),
-          ),
+          Text('Noted', style: text.headlineMedium),
+          const SizedBox(height: 2),
+          Text(label, style: text.labelSmall?.copyWith(color: p.textTertiary)),
         ],
       ),
     );
@@ -432,13 +391,15 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassPanel(
-      radius: 16,
-      blur: 14,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+    final AppPalette p = context.palette;
+    return SurfaceCard(
+      radius: AppTheme.radiusMd,
+      color: p.surfaceMuted,
+      borderColor: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       child: Row(
         children: <Widget>[
-          Icon(Icons.search_rounded, size: 19, color: AppColors.textLow),
+          Icon(Icons.search_rounded, size: 19, color: p.textTertiary),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
@@ -469,7 +430,7 @@ class _SearchField extends StatelessWidget {
                     child: Icon(
                       Icons.close_rounded,
                       size: 17,
-                      color: AppColors.textMid,
+                      color: p.textSecondary,
                     ),
                   ),
                 ),
@@ -499,7 +460,6 @@ class _FilterBar extends StatelessWidget {
             label: 'All',
             icon: Icons.grid_view_rounded,
             selected: notes.filter == NoteFilter.all,
-            accent: AppColors.violet,
             onTap: () => notes.setFilter(NoteFilter.all),
           ),
           const SizedBox(width: 8),
@@ -508,7 +468,6 @@ class _FilterBar extends StatelessWidget {
             icon: Icons.star_rounded,
             count: notes.favoriteCount,
             selected: notes.filter == NoteFilter.favorites,
-            accent: AppColors.amber,
             onTap: () => notes.setFilter(NoteFilter.favorites),
           ),
           const SizedBox(width: 8),
@@ -517,7 +476,6 @@ class _FilterBar extends StatelessWidget {
             icon: Icons.archive_rounded,
             count: notes.archivedCount,
             selected: notes.filter == NoteFilter.archive,
-            accent: AppColors.blue,
             onTap: () => notes.setFilter(NoteFilter.archive),
           ),
         ],
@@ -531,7 +489,6 @@ class _FilterPill extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.selected,
-    required this.accent,
     required this.onTap,
     this.count,
   });
@@ -539,61 +496,53 @@ class _FilterPill extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool selected;
-  final Color accent;
   final VoidCallback onTap;
   final int? count;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: selected
-              ? accent.withValues(alpha: 0.16)
-              : Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: selected
-                ? accent.withValues(alpha: 0.45)
-                : AppColors.glassBorder,
+    final AppPalette p = context.palette;
+    final Color fg = selected ? p.accent : p.textSecondary;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? p.accentSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: selected ? Colors.transparent : p.border),
           ),
-          boxShadow: selected
-              ? <BoxShadow>[
-                  BoxShadow(
-                    color: accent.withValues(alpha: 0.22),
-                    blurRadius: 16,
-                    offset: const Offset(0, 5),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(icon, size: 15, color: selected ? accent : AppColors.textLow),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: selected ? AppColors.textHigh : AppColors.textMid,
-                fontSize: 12,
-              ),
-            ),
-            if (count != null && count! > 0) ...<Widget>[
-              const SizedBox(width: 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, size: 15, color: fg),
+              const SizedBox(width: 6),
               Text(
-                '$count',
+                label,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: selected ? accent : AppColors.textLow,
-                  fontSize: 11,
+                  color: fg,
+                  fontSize: 12.5,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 ),
               ),
+              if (count != null && count! > 0) ...<Widget>[
+                const SizedBox(width: 5),
+                Text(
+                  '$count',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: selected ? p.accent : p.textTertiary,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -675,37 +624,27 @@ class _SmallChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
         decoration: BoxDecoration(
-          color: selected
-              ? AppColors.cyan.withValues(alpha: 0.15)
-              : Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected
-                ? AppColors.cyan.withValues(alpha: 0.45)
-                : AppColors.glassBorder,
-          ),
+          color: selected ? p.accentSoft : p.surfaceMuted,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             if (icon != null) ...<Widget>[
-              Icon(
-                icon,
-                size: 13,
-                color: selected ? AppColors.cyan : AppColors.textLow,
-              ),
+              Icon(icon, size: 13, color: selected ? p.accent : p.textTertiary),
               const SizedBox(width: 6),
             ],
             Text(
               label,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: selected ? AppColors.textHigh : AppColors.textMid,
+                color: selected ? p.accent : p.textSecondary,
                 fontSize: 12,
               ),
             ),
@@ -714,7 +653,7 @@ class _SmallChip extends StatelessWidget {
               Text(
                 trailing!,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.textLow,
+                  color: p.textTertiary,
                   fontSize: 11,
                 ),
               ),
@@ -734,18 +673,19 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 2),
       child: Row(
         children: <Widget>[
           if (icon != null) ...<Widget>[
-            Icon(icon, size: 13, color: AppColors.textLow),
+            Icon(icon, size: 13, color: p.textTertiary),
             const SizedBox(width: 6),
           ],
           Text(
             label.toUpperCase(),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textLow,
+              color: p.textTertiary,
               letterSpacing: 1.2,
               fontSize: 10.5,
             ),
@@ -856,13 +796,13 @@ class _SwipeBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color = archived ? AppColors.lime : AppColors.blue;
+    final AppPalette p = context.palette;
+    final Color color = archived ? p.accent : p.textSecondary;
     return Container(
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        color: p.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
       ),
       child: Icon(
         archived ? Icons.unarchive_rounded : Icons.archive_rounded,
@@ -883,6 +823,7 @@ class _FabScrim extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return ValueListenableBuilder<bool>(
       valueListenable: open,
       builder: (BuildContext context, bool isOpen, Widget? _) {
@@ -895,10 +836,7 @@ class _FabScrim extends StatelessWidget {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => open.value = false,
-              child: ColoredBox(
-                color: AppColors.bg.withValues(alpha: 0.55),
-                child: const SizedBox.expand(),
-              ),
+              child: ColoredBox(color: p.scrim, child: const SizedBox.expand()),
             ),
           ),
         );
@@ -968,6 +906,7 @@ class _ExpandingFabState extends State<_ExpandingFab>
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return ValueListenableBuilder<bool>(
       valueListenable: widget.open,
       builder: (BuildContext context, bool isOpen, Widget? _) {
@@ -979,14 +918,12 @@ class _ExpandingFabState extends State<_ExpandingFab>
               animation: _curve,
               icon: Icons.checklist_rounded,
               label: 'Checklist',
-              accent: AppColors.lime,
               onTap: () => _pick(widget.onNewChecklist),
             ),
             _MiniAction(
               animation: _curve,
               icon: Icons.notes_rounded,
               label: 'Note',
-              accent: AppColors.cyan,
               onTap: () => _pick(widget.onNewNote),
             ),
             const SizedBox(height: 8),
@@ -997,29 +934,17 @@ class _ExpandingFabState extends State<_ExpandingFab>
               child: GestureDetector(
                 onTap: _toggle,
                 child: Container(
-                  width: 60,
-                  height: 60,
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    shape: BoxShape.circle,
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: AppColors.violet.withValues(alpha: 0.55),
-                        blurRadius: 26,
-                        spreadRadius: -2,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
+                    color: p.accent,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                   ),
                   child: AnimatedRotation(
-                    turns: isOpen ? 0.375 : 0,
-                    duration: const Duration(milliseconds: 260),
-                    curve: Curves.easeOutBack,
-                    child: const Icon(
-                      Icons.add_rounded,
-                      size: 30,
-                      color: Colors.white,
-                    ),
+                    turns: isOpen ? 0.125 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    child: Icon(Icons.add_rounded, size: 28, color: p.onAccent),
                   ),
                 ),
               ),
@@ -1036,18 +961,17 @@ class _MiniAction extends StatelessWidget {
     required this.animation,
     required this.icon,
     required this.label,
-    required this.accent,
     required this.onTap,
   });
 
   final Animation<double> animation;
   final IconData icon;
   final String label;
-  final Color accent;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return AnimatedBuilder(
       animation: animation,
       builder: (BuildContext context, Widget? child) {
@@ -1081,16 +1005,14 @@ class _MiniAction extends StatelessWidget {
           excludeSemantics: true,
           child: GestureDetector(
             onTap: onTap,
-            child: GlassPanel(
-              radius: 16,
-              blur: 20,
-              fill: AppColors.glassFillStrong,
-              glow: accent,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            child: SurfaceCard(
+              radius: AppTheme.radiusMd,
+              borderColor: p.borderStrong,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Icon(icon, size: 17, color: accent),
+                  Icon(icon, size: 17, color: p.accent),
                   const SizedBox(width: 9),
                   Text(
                     label,
