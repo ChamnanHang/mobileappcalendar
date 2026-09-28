@@ -6,14 +6,9 @@ import 'package:noted/data/note_store.dart';
 import 'package:noted/utils/khmer_text.dart';
 
 void main() {
-  // The aurora background animates forever, so pumpAndSettle would never
-  // return — advance a fixed number of frames instead.
+  // The calendar is the first tab, so booting the app lands on it.
   Future<void> openCalendar(WidgetTester tester) async {
     await tester.pumpWidget(NotedApp(store: MemoryNoteStore()));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-
-    await tester.tap(find.text('Calendar'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
   }

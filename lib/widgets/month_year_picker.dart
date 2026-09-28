@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/khmer_text.dart';
-import 'glass.dart';
+import 'surface.dart';
 
 /// Sheet for jumping straight to a month in any year, instead of stepping a
 /// month at a time. Pops the chosen month as a `DateTime` on the 1st.
@@ -89,6 +89,7 @@ class _MonthYearPickerState extends State<MonthYearPicker> {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
 
     // Scrolls so the sheet still fits on short screens and in landscape.
@@ -103,7 +104,7 @@ class _MonthYearPickerState extends State<MonthYearPicker> {
               height: 4,
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: AppColors.glassBorderStrong,
+                color: p.borderStrong,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -112,10 +113,10 @@ class _MonthYearPickerState extends State<MonthYearPicker> {
           // Year stepper.
           Row(
             children: <Widget>[
-              GlassIconButton(
+              CircleIconButton(
                 icon: Icons.chevron_left_rounded,
                 tooltip: 'Previous year',
-                size: 38,
+                size: 40,
                 onTap: () => _applyYear(_year - 1),
               ),
               Expanded(
@@ -127,10 +128,7 @@ class _MonthYearPickerState extends State<MonthYearPicker> {
                       padding: const EdgeInsets.only(bottom: 4),
                       decoration: BoxDecoration(
                         border: Border(
-                          bottom: BorderSide(
-                            color: AppColors.cyan.withValues(alpha: 0.45),
-                            width: 1.4,
-                          ),
+                          bottom: BorderSide(color: p.accent, width: 1.5),
                         ),
                       ),
                       child: TextField(
@@ -144,10 +142,7 @@ class _MonthYearPickerState extends State<MonthYearPicker> {
                           FilteringTextInputFormatter.digitsOnly,
                           LengthLimitingTextInputFormatter(4),
                         ],
-                        style: text.displaySmall?.copyWith(
-                          color: AppColors.textHigh,
-                          fontSize: 30,
-                        ),
+                        style: text.displaySmall?.copyWith(fontSize: 28),
                         decoration: const InputDecoration(
                           hintText: 'ឆ្នាំ',
                           isCollapsed: true,
@@ -155,22 +150,17 @@ class _MonthYearPickerState extends State<MonthYearPicker> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    ShaderMask(
-                      shaderCallback: (Rect bounds) =>
-                          AppColors.primaryGradient.createShader(bounds),
-                      blendMode: BlendMode.srcIn,
-                      child: Text(
-                        toKhmerDigits(_year),
-                        style: text.titleMedium?.copyWith(color: Colors.white),
-                      ),
+                    Text(
+                      toKhmerDigits(_year),
+                      style: text.titleSmall?.copyWith(color: p.textSecondary),
                     ),
                   ],
                 ),
               ),
-              GlassIconButton(
+              CircleIconButton(
                 icon: Icons.chevron_right_rounded,
                 tooltip: 'Next year',
-                size: 38,
+                size: 40,
                 onTap: () => _applyYear(_year + 1),
               ),
             ],
@@ -186,6 +176,7 @@ class _MonthYearPickerState extends State<MonthYearPicker> {
               itemExtent: _yearItemWidth,
               itemCount: widget.lastYear - widget.firstYear + 1,
               itemBuilder: (BuildContext context, int index) {
+                final AppPalette p = context.palette;
                 final int year = widget.firstYear + index;
                 final bool selected = year == _year;
                 return Padding(
@@ -197,22 +188,13 @@ class _MonthYearPickerState extends State<MonthYearPicker> {
                       duration: const Duration(milliseconds: 180),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: selected
-                            ? AppColors.cyan.withValues(alpha: 0.16)
-                            : Colors.white.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: selected
-                              ? AppColors.cyan.withValues(alpha: 0.5)
-                              : AppColors.glassBorder,
-                        ),
+                        color: selected ? p.accent : Colors.transparent,
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                       ),
                       child: Text(
                         toKhmerDigits(year),
                         style: text.titleSmall?.copyWith(
-                          color: selected
-                              ? AppColors.textHigh
-                              : AppColors.textMid,
+                          color: selected ? p.onAccent : p.textSecondary,
                         ),
                       ),
                     ),
@@ -223,10 +205,7 @@ class _MonthYearPickerState extends State<MonthYearPicker> {
           ),
           const SizedBox(height: 18),
 
-          Text(
-            'ខែ',
-            style: text.labelSmall?.copyWith(color: AppColors.textLow),
-          ),
+          Text('ខែ', style: text.labelSmall?.copyWith(color: p.textTertiary)),
           const SizedBox(height: 10),
 
           // Month grid.
@@ -252,22 +231,15 @@ class _MonthYearPickerState extends State<MonthYearPicker> {
                   duration: const Duration(milliseconds: 180),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: selected
-                        ? AppColors.violet.withValues(alpha: 0.18)
-                        : Colors.white.withValues(alpha: 0.04),
+                    color: selected ? p.accent : p.surfaceMuted,
                     borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                    border: Border.all(
-                      color: selected
-                          ? AppColors.violet.withValues(alpha: 0.5)
-                          : AppColors.glassBorder,
-                    ),
                   ),
                   child: Text(
                     gregorianMonthName(month),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: text.titleSmall?.copyWith(
-                      color: selected ? AppColors.textHigh : AppColors.textMid,
+                      color: selected ? p.onAccent : p.textPrimary,
                     ),
                   ),
                 ),

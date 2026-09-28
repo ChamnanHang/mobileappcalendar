@@ -4,9 +4,9 @@ import '../models/note.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/relative_time.dart';
-import 'glass.dart';
+import 'surface.dart';
 
-/// A single glass note tile in the home grid.
+/// A single note tile in the home grid.
 class NoteCard extends StatelessWidget {
   const NoteCard({
     super.key,
@@ -27,18 +27,16 @@ class NoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
-    final Color accent = AppColors.accentAt(note.accent);
+    final Color accent = NoteColors.at(note.accent);
     final bool isChecklist = note.kind == NoteKind.checklist;
 
-    return GlassTapPanel(
+    return TapSurface(
       onTap: onTap,
       onLongPress: onLongPress,
-      radius: AppTheme.radiusLg,
-      glow: accent,
-      // Dozens of these can be on screen at once; see GlassPanel.blurred.
-      blurred: false,
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+      radius: AppTheme.radiusMd,
+      padding: const EdgeInsets.fromLTRB(14, 13, 10, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -46,19 +44,15 @@ class NoteCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              // The note's colour, reduced to a dot: enough to tell notes apart
+              // at a glance without the card turning into a swatch.
               Container(
-                width: 3,
-                height: 18,
-                margin: const EdgeInsets.only(top: 3, right: 10),
+                width: 8,
+                height: 8,
+                margin: const EdgeInsets.only(top: 7, right: 9),
                 decoration: BoxDecoration(
                   color: accent,
-                  borderRadius: BorderRadius.circular(2),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: accent.withValues(alpha: 0.6),
-                      blurRadius: 8,
-                    ),
-                  ],
+                  shape: BoxShape.circle,
                 ),
               ),
               Expanded(
@@ -68,15 +62,19 @@ class NoteCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: text.titleMedium?.copyWith(
                     color: note.title.trim().isEmpty
-                        ? AppColors.textLow
-                        : AppColors.textHigh,
+                        ? p.textTertiary
+                        : p.textPrimary,
                   ),
                 ),
               ),
               if (note.pinned)
                 Padding(
                   padding: const EdgeInsets.only(left: 4),
-                  child: Icon(Icons.push_pin_rounded, size: 15, color: accent),
+                  child: Icon(
+                    Icons.push_pin_outlined,
+                    size: 15,
+                    color: p.textTertiary,
+                  ),
                 ),
             ],
           ),
@@ -93,7 +91,7 @@ class NoteCard extends StatelessWidget {
               maxLines: 6,
               overflow: TextOverflow.ellipsis,
               style: text.bodySmall?.copyWith(
-                color: AppColors.textMid,
+                color: p.textSecondary,
                 height: 1.45,
               ),
             ),
@@ -122,6 +120,7 @@ class _ChecklistPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
     final List<ChecklistItem> filled = note.items
         .where((ChecklistItem i) => i.text.trim().isNotEmpty)
@@ -155,13 +154,11 @@ class _ChecklistPreview extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: text.bodySmall?.copyWith(
-                          color: item.done
-                              ? AppColors.textLow
-                              : AppColors.textMid,
+                          color: item.done ? p.textTertiary : p.textSecondary,
                           decoration: item.done
                               ? TextDecoration.lineThrough
                               : null,
-                          decorationColor: AppColors.textLow,
+                          decorationColor: p.textTertiary,
                         ),
                       ),
                     ),
@@ -175,7 +172,7 @@ class _ChecklistPreview extends StatelessWidget {
             padding: const EdgeInsets.only(top: 1),
             child: Text(
               '+$remaining more',
-              style: text.labelSmall?.copyWith(color: AppColors.textLow),
+              style: text.labelSmall?.copyWith(color: p.textTertiary),
             ),
           ),
         if (note.items.isNotEmpty) ...<Widget>[
@@ -191,8 +188,8 @@ class _ChecklistPreview extends StatelessWidget {
                 builder: (BuildContext context, double value, Widget? _) =>
                     LinearProgressIndicator(
                       value: value,
-                      minHeight: 4,
-                      backgroundColor: Colors.white.withValues(alpha: 0.07),
+                      minHeight: 3,
+                      backgroundColor: context.palette.surfaceMuted,
                       valueColor: AlwaysStoppedAnimation<Color>(accent),
                     ),
               ),
@@ -212,6 +209,7 @@ class _Tick extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
@@ -220,19 +218,13 @@ class _Tick extends StatelessWidget {
       margin: const EdgeInsets.only(top: 2),
       decoration: BoxDecoration(
         color: done ? accent : Colors.transparent,
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(
-          color: done ? accent : AppColors.glassBorderStrong,
-          width: 1.4,
-        ),
-        boxShadow: done
-            ? <BoxShadow>[
-                BoxShadow(color: accent.withValues(alpha: 0.5), blurRadius: 7),
-              ]
-            : null,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: done ? accent : p.borderStrong, width: 1.4),
       ),
+      // White reads on every note colour; the old black check vanished on
+      // the darker ones.
       child: done
-          ? const Icon(Icons.check_rounded, size: 11, color: Colors.black)
+          ? const Icon(Icons.check_rounded, size: 11, color: Colors.white)
           : null,
     );
   }
@@ -251,6 +243,7 @@ class _CardFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
 
     return Row(
@@ -263,7 +256,7 @@ class _CardFooter extends StatelessWidget {
             children: <Widget>[
               Text(
                 relativeTime(note.updatedAt),
-                style: text.labelSmall?.copyWith(color: AppColors.textLow),
+                style: text.labelSmall?.copyWith(color: p.textTertiary),
               ),
               for (final String tag in note.tags.take(2)) _TagPill(tag: tag),
             ],
@@ -281,7 +274,7 @@ class _CardFooter extends StatelessWidget {
               child: Icon(
                 note.favorite ? Icons.star_rounded : Icons.star_outline_rounded,
                 size: 18,
-                color: note.favorite ? AppColors.amber : AppColors.textLow,
+                color: note.favorite ? p.holy : p.textTertiary,
               ),
             ),
           ),
@@ -298,19 +291,18 @@ class _TagPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
+        color: p.surfaceMuted,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.glassBorder),
       ),
       child: Text(
         '#$tag',
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: AppColors.textMid,
-          fontSize: 10,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.labelSmall?.copyWith(color: p.textSecondary, fontSize: 10),
       ),
     );
   }

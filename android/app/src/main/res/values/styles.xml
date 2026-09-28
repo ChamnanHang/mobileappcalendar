@@ -2,11 +2,10 @@
 <resources>
     <!-- Theme shown while the process starts.
 
-         Both this file and values-night/ use the dark parent: the app is
-         dark-only (themeMode is pinned to dark in NotedApp), so following the
-         system light theme here would only produce a white flash before the
-         first Flutter frame. -->
-    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+         The app follows the system light/dark setting (ThemeMode.system), so
+         this light variant and the dark one in values-night/ each paint the
+         background the first Flutter frame will use — no flash either way. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <!-- Show a splash screen on the activity. Automatically removed when
              the Flutter engine draws its first frame -->
         <item name="android:windowBackground">@drawable/launch_background</item>
@@ -15,7 +14,7 @@
          This theme determines the color of the Android Window while your
          Flutter UI initializes, as well as behind your Flutter UI while its
          running. -->
-    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">@color/app_background</item>
     </style>
 </resources>

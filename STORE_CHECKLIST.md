@@ -84,10 +84,10 @@ password, or a manual decision — I can't do these).
 
 ## 6b. Platform polish already handled
 
-- **[done]** **No launch flash.** The Android `LaunchTheme` used `Theme.Light` with a white splash
-  drawable, and the iOS `LaunchScreen.storyboard` had a white background — so a dark-only app
-  flashed white on every cold start, worst on a light-mode device. Both now use `AppColors.bg`
-  (`#06070F`), and `UIUserInterfaceStyle` is pinned to `Dark`.
+- **[done]** **No launch flash in either mode.** The app follows the system light/dark setting, so
+  the launch screens do too: Android has a light `LaunchTheme` in `values/` and a dark one in
+  `values-night/`, each painting `@color/app_background` (white / `#0F0F12`); iOS paints the
+  `LaunchBackground` colour set, which has a dark appearance. Both match the first Flutter frame.
 - **[done]** **Predictive back** (`android:enableOnBackInvokedCallback="true"`), required behaviour
   on Android 13+ and expected by reviewers on 14+.
 - **[done]** **Backup rules.** `backup_rules.xml` (Android 11 and below) and
@@ -107,12 +107,14 @@ password, or a manual decision — I can't do these).
   checked state, note cards offer archive and more-actions as semantic actions (swipe and
   long-press are unreachable with a screen reader), and text scale is clamped to 0.85–1.35 so
   accessibility font sizes do not break the compact chrome.
-- **[done]** **Reduce Motion** (iOS) / **Remove animations** (Android) stops the aurora repainting.
+- **[done]** **Reduce Motion** (iOS) / **Remove animations** (Android) is honoured; there is no
+  continuously animating background left to stop — an idle screen draws no frames.
 
 ## 7. Store listing assets
 
 - **[you]** Screenshots: iPhone 6.7" and 6.5"; Android phone (min 2). The calendar and the notes
-  grid both look good — `flutter run -d chrome` at a phone viewport is an easy way to capture them.
+  grid both look good in light and dark — `flutter run -d chrome` at a phone viewport is an easy way
+  to capture them.
 - **[you]** Play feature graphic 1024×500, short (80 char) and full (4000 char) descriptions.
 - **[you]** Content rating questionnaire, target audience, and a support contact.
 
@@ -143,8 +145,8 @@ what users download is far smaller.)
 The `build-ios` job runs on a macOS runner and compiles for the simulator — **passing**, the first
 time the iOS side has ever been compiled. It covers the Dart build, CocoaPods resolution and
 linking, and asserts on the built bundle rather than on the repo: `PrivacyInfo.xcprivacy` is inside
-`Runner.app` and well-formed, and the Info.plist carries `UIUserInterfaceStyle=Dark` and
-`ITSAppUsesNonExemptEncryption=false`. That retires the warning this file used to carry about the
+`Runner.app` and well-formed, the Info.plist carries `ITSAppUsesNonExemptEncryption=false` and no
+`UIUserInterfaceStyle` pin, and the `LaunchBackground` colour is compiled into `Assets.car`. That retires the warning this file used to carry about the
 privacy manifest sitting outside the Xcode target — it is now proven bundled by a real build, not
 by reading the `.pbxproj`.
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Identical to values/styles.xml: the app is dark on every device, so
-         both configurations use the same window background. -->
+    <!-- Dark counterpart of values/styles.xml, used when the system is in
+         dark mode. @color/app_background resolves to the dark value here. -->
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>

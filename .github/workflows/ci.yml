@@ -120,15 +120,26 @@ jobs:
           plutil -lint "$APP/PrivacyInfo.xcprivacy"
           echo "PrivacyInfo.xcprivacy is bundled and well-formed."
 
-      # Guards the dark launch screen and the pinned interface style, both of
-      # which only take effect once they are compiled into the bundle.
+      # Guards the export-compliance answer and the system-following launch
+      # screen, which only take effect once they are compiled into the bundle.
       - name: Verify Info.plist keys survived the build
         run: |
-          PLIST=build/ios/iphonesimulator/Runner.app/Info.plist
-          style=$(plutil -extract UIUserInterfaceStyle raw "$PLIST")
+          APP=build/ios/iphonesimulator/Runner.app
+          PLIST=$APP/Info.plist
           enc=$(plutil -extract ITSAppUsesNonExemptEncryption raw "$PLIST")
-          echo "UIUserInterfaceStyle=$style ITSAppUsesNonExemptEncryption=$enc"
-          [ "$style" = "Dark" ] || { echo "::error::UIUserInterfaceStyle is not Dark"; exit 1; }
+          echo "ITSAppUsesNonExemptEncryption=$enc"
+          [ "$enc" = "false" ] || { echo "::error::ITSAppUsesNonExemptEncryption is not false"; exit 1; }
+          # The app follows the system light/dark setting; pinning a style here
+          # would make the launch screen disagree with the first Flutter frame.
+          if plutil -extract UIUserInterfaceStyle raw "$PLIST" >/dev/null 2>&1; then
+            echo "::error::UIUserInterfaceStyle is set; the app follows the system theme"; exit 1
+          fi
+          # The launch storyboard's background is this named colour.
+          # Captured first: grep -q exiting early would SIGPIPE assetutil and
+          # trip pipefail even when the colour is there.
+          assets=$(xcrun assetutil --info "$APP/Assets.car")
+          grep -q '"LaunchBackground"' <<<"$assets" \
+            || { echo "::error::LaunchBackground colour missing from Assets.car"; exit 1; }
 
       - name: Package the simulator app
         run: |

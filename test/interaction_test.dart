@@ -5,17 +5,20 @@ import 'package:noted/data/note_store.dart';
 import 'package:noted/utils/khmer_text.dart';
 
 void main() {
-  // The aurora animates forever, so pumpAndSettle would never return —
-  // advance a fixed number of frames instead.
+  // Fixed frame counts rather than pumpAndSettle, so a test that does leave
+  // something animating fails on its assertions instead of timing out.
   Future<void> boot(WidgetTester tester) async {
     await tester.pumpWidget(NotedApp(store: MemoryNoteStore()));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
   }
 
-  Future<void> openCalendar(WidgetTester tester) async {
+  // The calendar is the first tab, so booting lands on it.
+  Future<void> openCalendar(WidgetTester tester) => boot(tester);
+
+  Future<void> openNotes(WidgetTester tester) async {
     await boot(tester);
-    await tester.tap(find.text('Calendar'));
+    await tester.tap(find.text('Notes'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
   }
@@ -137,7 +140,7 @@ void main() {
     testWidgets('opens, then a tap outside closes it', (
       WidgetTester tester,
     ) async {
-      await boot(tester);
+      await openNotes(tester);
 
       // Collapsed: the actions are laid out but not interactive.
       await tester.tap(find.byIcon(Icons.add_rounded).last);
@@ -165,7 +168,7 @@ void main() {
     });
 
     testWidgets('choosing Note opens the editor', (WidgetTester tester) async {
-      await boot(tester);
+      await openNotes(tester);
 
       await tester.tap(find.byIcon(Icons.add_rounded).last);
       await tester.pump();
@@ -179,21 +182,34 @@ void main() {
     });
   });
 
-  group('reduced motion', () {
-    testWidgets('the aurora stops animating when the OS asks it to', (
-      WidgetTester tester,
-    ) async {
-      await tester.pumpWidget(
-        MediaQuery(
-          data: const MediaQueryData(disableAnimations: true),
-          child: NotedApp(store: MemoryNoteStore()),
-        ),
+  group('shell', () {
+    testWidgets('opens on the calendar', (WidgetTester tester) async {
+      await boot(tester);
+      final DateTime now = DateTime.now();
+
+      expect(
+        find.text(monthLabel(DateTime(now.year, now.month))),
+        findsOneWidget,
       );
+      // The note list is not built until its tab is first opened.
+      expect(find.text('Noted'), findsNothing);
+
+      await tester.tap(find.text('Notes'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
-      // With the aurora stopped there is no perpetual ticker, so the tree
-      // settles — which it never does otherwise.
+      expect(find.text('Noted'), findsOneWidget);
+    });
+
+    testWidgets('settles: nothing animates forever', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(NotedApp(store: MemoryNoteStore()));
+
+      // Would time out if any widget kept a ticker running, which would also
+      // keep the GPU busy and drain the battery on an idle screen.
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Notes'));
       await tester.pumpAndSettle();
 
       expect(find.text('Noted'), findsOneWidget);

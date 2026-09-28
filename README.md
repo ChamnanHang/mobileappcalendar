@@ -1,9 +1,11 @@
 # Noted
 
-A modern, offline-first notes app built with Flutter — dark glassmorphic UI, neon accents, and a
-live markdown editor.
+An offline-first Khmer lunar calendar and notes app built with Flutter — a quiet, minimal UI that
+follows the system light/dark setting, and a live markdown editor.
 
 ## Features
+
+The app opens on the calendar; notes are the second tab.
 
 - **Notes & checklists** — two note types; checklists show a progress bar and tickable items you can
   toggle straight from the home grid.
@@ -25,22 +27,26 @@ live markdown editor.
 
 ## Design
 
-Dark aurora background (animated neon blobs painted on a canvas), frosted-glass panels, six
-selectable per-note accent colours, and spring-loaded micro-interactions. The type scale uses the
-platform system face (SF Pro / Roboto), so nothing is fetched at runtime.
+Minimal and flat: plain surfaces with hairline borders, no shadows, blur or gradients, and a single
+indigo accent. Colour is kept for meaning — red for Sundays and public holidays, amber for Buddhist
+holy days, the accent for today and the current selection — plus six per-note tag colours chosen
+to read on both backgrounds. The type scale uses the platform system face (SF Pro / Roboto), so
+nothing is fetched at runtime.
 
-The app is dark-only: `themeMode` is pinned, and both launch screens use `AppColors.bg` so there is
-no white flash on a light-mode device.
+Light and dark both ship, and the app follows the system setting (`ThemeMode.system`). Colours live
+in one `AppPalette` theme extension ([lib/theme/app_colors.dart](lib/theme/app_colors.dart)), read
+with `context.palette`; text and icon colours meet WCAG AA (4.5:1) on every surface they sit on in
+both modes. The native launch screens have a light and a dark variant too — `values-night/` on
+Android, a `LaunchBackground` colour set with a dark appearance on iOS — so there is no flash
+between the splash and the first Flutter frame in either mode.
 
 ### Where the frames go
 
 A few deliberate choices, because this is the kind of UI that gets slow quietly:
 
-- **Blur is rationed.** `BackdropFilter` costs a `saveLayer` plus a gaussian pass over the pixels
-  behind it, per panel, per frame. The chrome that sits over scrolling content — nav bar, sheets,
-  search field, toolbar — pays it. Note cards do not (`GlassPanel(blurred: false)`): dozens are on
-  screen at once, and what is behind them is the aurora, an already-smooth gradient, so blurring it
-  returns very nearly the same pixels.
+- **Nothing expensive to paint.** No `BackdropFilter`, no shadows, no animated background: every
+  surface is a solid fill and a 1px border. An idle screen schedules no frames at all, which a test
+  asserts (`pumpAndSettle` returns).
 - **The grid is lazy.** Notes are chunked into a `SliverList` rather than built all at once, so
   build cost tracks the viewport, not the library size. Each card is a `RepaintBoundary`.
 - **Derived state is computed once per change, not once per build.** `visibleNotes`, `allTags`,
@@ -50,8 +56,8 @@ A few deliberate choices, because this is the kind of UI that gets slow quietly:
   checklist edits update the model without `setState`; structural edits still rebuild.
 - **The calendar caches months.** `KhmerMonthCache` is a small LRU, with the neighbouring months
   warmed in a microtask so an arrow tap or a swipe lands on a grid that already exists.
-- **The aurora stops when asked.** It respects reduce-motion, and instances share a phase so the
-  background does not jump when the editor fades in over the list.
+- **The notes tab is built on first visit.** The app opens on the calendar, so the note grid is
+  not laid out until someone actually switches to it.
 
 ## Khmer calendar
 
@@ -136,20 +142,17 @@ Run `flutter doctor` to confirm what's missing.
 flutter test
 ```
 
-98 tests cover the notes controller (sorting, filtering, search, archive, undo, cache invalidation,
+104 tests cover the notes controller (sorting, filtering, search, archive, undo, cache invalidation,
 save durability), JSON persistence round-trips, the markdown helpers, the `Note` derived-state
 caches, the Khmer lunar algorithm (see the table above), the month cache and its LRU eviction, and
-widget tests for boot / open / search / calendar / month swipe / the expanding FAB / reduce-motion.
-
-> The aurora background animates continuously, so widget tests advance frames with
-> `tester.pump(duration)` — `pumpAndSettle` would never return. The one exception is the
-> reduce-motion test, which asserts exactly that: with animations disabled the tree settles.
+widget tests for boot / open / search / calendar / month swipe / the expanding FAB / tab order,
+plus one that asserts the app settles — nothing animates forever.
 
 ## Layout
 
 ```
 lib/
-  main.dart                     entry point + system chrome
+  main.dart                     entry point, error handling
   app.dart                      NotedApp, injectable NoteStore
   models/note.dart              Note, ChecklistItem, NoteKind
   data/
@@ -162,13 +165,13 @@ lib/
     home_screen.dart            grid, search, filters, expanding FAB
     editor_screen.dart          title/body/checklist editing, options sheets
     calendar_screen.dart        month grid + selected-day panel
-  theme/                        colours + ThemeData
+  theme/                        AppPalette (light + dark) + ThemeData
   utils/
     markdown_controller.dart    live-styling TextEditingController + toolbar helpers
     markdown_text.dart          stripMarkdown, Flutter-free so models can use it
     khmer_text.dart             Khmer numerals, month/weekday/animal/era names
     date_keys.dart, relative_time.dart
-  widgets/                      glass panels, aurora background, cards, sheets, nav bar
+  widgets/                      surfaces, cards, sheets, nav bar
 ```
 
 ## Storage note

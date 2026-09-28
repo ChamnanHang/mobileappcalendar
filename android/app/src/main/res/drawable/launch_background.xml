@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Matches AppColors.bg. The template shipped @android:color/white here,
-         which meant a light-mode device showed a white splash and then snapped
-         to a near-black UI the moment Flutter drew its first frame. -->
+    <!-- @color/app_background has a light and a night value, so the splash
+         matches whichever theme the app is about to draw in. -->
     <item android:drawable="@color/app_background" />
 </layer-list>

@@ -5,104 +5,100 @@ import '../data/ads.dart';
 import '../screens/calendar_screen.dart';
 import '../screens/home_screen.dart';
 import '../theme/app_colors.dart';
-import 'aurora_background.dart';
-import 'glass.dart';
 
-/// Hosts the two top-level surfaces and owns the single aurora background, so
-/// switching tabs never restarts the animation.
+/// Hosts the two top-level tabs: the calendar first, then notes.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
+
+  /// Tab indices, so callers and tests do not depend on a bare `0` or `1`.
+  static const int calendarTab = 0;
+  static const int notesTab = 1;
 
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
 class _AppShellState extends State<AppShell> {
-  int _index = 0;
+  int _index = AppShell.calendarTab;
 
-  /// The calendar is only built once its tab has been opened, so the app never
-  /// calls the calendar service at startup.
-  bool _calendarVisited = false;
+  /// Notes are only built once their tab has been opened. The calendar is the
+  /// landing screen now, so it is the one built eagerly; the note grid waits
+  /// until someone asks for it.
+  bool _notesVisited = false;
+
+  void _select(int value) {
+    if (value == _index) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _index = value;
+      if (value == AppShell.notesTab) _notesVisited = true;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return AuroraBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: IndexedStack(
-          index: _index,
-          children: <Widget>[
-            const HomeScreen(),
-            if (_calendarVisited)
-              const CalendarScreen()
-            else
-              const SizedBox.shrink(),
-          ],
-        ),
-        bottomNavigationBar: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            // Renders nothing unless ads are enabled on a mobile build.
-            const AdBanner(),
-            _GlassNavBar(
-              index: _index,
-              onChanged: (int value) {
-                if (value == _index) return;
-                HapticFeedback.selectionClick();
-                setState(() {
-                  _index = value;
-                  if (value == 1) _calendarVisited = true;
-                });
-              },
-            ),
-          ],
-        ),
+    return Scaffold(
+      body: IndexedStack(
+        index: _index,
+        children: <Widget>[
+          const CalendarScreen(),
+          if (_notesVisited) const HomeScreen() else const SizedBox.shrink(),
+        ],
+      ),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          // Renders nothing unless ads are enabled on a mobile build.
+          const AdBanner(),
+          _NavBar(index: _index, onChanged: _select),
+        ],
       ),
     );
   }
 }
 
-class _GlassNavBar extends StatelessWidget {
-  const _GlassNavBar({required this.index, required this.onChanged});
+/// A flat tab bar: a hairline rule on top, icon over label, and the accent on
+/// the current tab.
+class _NavBar extends StatelessWidget {
+  const _NavBar({required this.index, required this.onChanged});
 
   final int index;
   final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        18,
-        0,
-        18,
-        12 + MediaQuery.paddingOf(context).bottom * 0.4,
+    final AppPalette p = context.palette;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: p.background,
+        border: Border(top: BorderSide(color: p.border)),
       ),
-      child: GlassPanel(
-        radius: 22,
-        blur: 26,
-        fill: AppColors.glassFillStrong,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: _NavItem(
-                icon: Icons.sticky_note_2_rounded,
-                label: 'Notes',
-                accent: AppColors.violet,
-                selected: index == 0,
-                onTap: () => onChanged(0),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: _NavItem(
+                  icon: Icons.calendar_today_outlined,
+                  selectedIcon: Icons.calendar_today,
+                  label: 'Calendar',
+                  selected: index == AppShell.calendarTab,
+                  onTap: () => onChanged(AppShell.calendarTab),
+                ),
               ),
-            ),
-            Expanded(
-              child: _NavItem(
-                icon: Icons.calendar_month_rounded,
-                label: 'Calendar',
-                accent: AppColors.cyan,
-                selected: index == 1,
-                onTap: () => onChanged(1),
+              Expanded(
+                child: _NavItem(
+                  icon: Icons.sticky_note_2_outlined,
+                  selectedIcon: Icons.sticky_note_2,
+                  label: 'Notes',
+                  selected: index == AppShell.notesTab,
+                  onTap: () => onChanged(AppShell.notesTab),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -112,76 +108,45 @@ class _GlassNavBar extends StatelessWidget {
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,
+    required this.selectedIcon,
     required this.label,
-    required this.accent,
     required this.selected,
     required this.onTap,
   });
 
   final IconData icon;
+  final IconData selectedIcon;
   final String label;
-  final Color accent;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
+    final Color color = selected ? p.accent : p.textTertiary;
+
     return Semantics(
       button: true,
       selected: selected,
       label: label,
       excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: InkWell(
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: selected
-                ? accent.withValues(alpha: 0.15)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected
-                  ? accent.withValues(alpha: 0.42)
-                  : Colors.transparent,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Icon(selected ? selectedIcon : icon, size: 22, color: color),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              ),
             ),
-            boxShadow: selected
-                ? <BoxShadow>[
-                    BoxShadow(
-                      color: accent.withValues(alpha: 0.22),
-                      blurRadius: 18,
-                      offset: const Offset(0, 6),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Icon(
-                icon,
-                size: 19,
-                color: selected ? accent : AppColors.textLow,
-              ),
-              const SizedBox(width: 8),
-              // Flexible so the bar survives very narrow layouts instead of
-              // overflowing.
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontSize: 13.5,
-                    color: selected ? AppColors.textHigh : AppColors.textLow,
-                  ),
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );

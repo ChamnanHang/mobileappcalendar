@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/markdown_controller.dart';
-import 'glass.dart';
+import 'surface.dart';
 
 /// Markdown formatting bar that sits above the keyboard in the editor.
 class FormatToolbar extends StatelessWidget {
@@ -24,11 +24,9 @@ class FormatToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassPanel(
+    return SurfaceCard(
       radius: AppTheme.radiusMd,
-      blur: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-      fill: AppColors.glassFillStrong,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.zero,
@@ -103,6 +101,7 @@ class _ToolButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -113,11 +112,11 @@ class _ToolButton extends StatelessWidget {
           height: 38,
           child: Center(
             child: icon != null
-                ? Icon(icon, size: 20, color: AppColors.textMid)
+                ? Icon(icon, size: 20, color: p.textSecondary)
                 : Text(
                     label!,
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: AppColors.textMid,
+                      color: p.textSecondary,
                       fontSize: 13,
                     ),
                   ),
@@ -133,11 +132,12 @@ class _ToolDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppPalette p = context.palette;
     return Container(
       width: 1,
       height: 20,
       margin: const EdgeInsets.symmetric(horizontal: 5),
-      color: AppColors.glassBorder,
+      color: p.border,
     );
   }
 }

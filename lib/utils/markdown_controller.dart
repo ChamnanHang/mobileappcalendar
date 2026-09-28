@@ -30,6 +30,9 @@ class MarkdownEditingController extends TextEditingController {
     TextStyle? style,
     required bool withComposing,
   }) {
+    // Resolved once per build rather than per span; the helpers below run for
+    // every line and every inline match.
+    _p = context.palette;
     final TextStyle base = style ?? const TextStyle();
     final String src = text;
     final List<InlineSpan> children = <InlineSpan>[];
@@ -47,7 +50,12 @@ class MarkdownEditingController extends TextEditingController {
     return TextSpan(style: base, children: children);
   }
 
-  Color get _dimColor => (AppColors.textHigh).withValues(alpha: 0.26);
+  /// Palette for the build in progress. Set at the top of [buildTextSpan].
+  AppPalette _p = AppPalette.light;
+
+  /// Markdown markers stay visible so the caret never drifts, but quieter
+  /// than any text tier so they read as scaffolding rather than content.
+  Color get _dimColor => _p.textPrimary.withValues(alpha: 0.3);
 
   List<InlineSpan> _lineSpans(String line, TextStyle base) {
     if (line.isEmpty) return const <InlineSpan>[];
@@ -82,16 +90,16 @@ class MarkdownEditingController extends TextEditingController {
       final bool done = checkbox.group(2)!.toLowerCase() == 'x';
       final TextStyle bodyStyle = done
           ? base.copyWith(
-              color: AppColors.textLow,
+              color: _p.textTertiary,
               decoration: TextDecoration.lineThrough,
-              decorationColor: AppColors.textLow,
+              decorationColor: _p.textTertiary,
             )
           : base;
       return <InlineSpan>[
         TextSpan(
           text: checkbox.group(0),
           style: base.copyWith(
-            color: done ? AppColors.lime : AppColors.cyan,
+            color: done ? _p.textTertiary : _p.accent,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -104,10 +112,7 @@ class MarkdownEditingController extends TextEditingController {
       return <InlineSpan>[
         TextSpan(
           text: bullet.group(0),
-          style: base.copyWith(
-            color: AppColors.violet,
-            fontWeight: FontWeight.w700,
-          ),
+          style: base.copyWith(color: _p.accent, fontWeight: FontWeight.w700),
         ),
         ..._inlineSpans(line.substring(bullet.end), base),
       ];
@@ -119,13 +124,13 @@ class MarkdownEditingController extends TextEditingController {
         TextSpan(
           text: quote.group(0),
           style: base.copyWith(
-            color: AppColors.amber,
+            color: _p.textTertiary,
             fontWeight: FontWeight.w700,
           ),
         ),
         ..._inlineSpans(
           line.substring(quote.end),
-          base.copyWith(color: AppColors.textMid, fontStyle: FontStyle.italic),
+          base.copyWith(color: _p.textSecondary, fontStyle: FontStyle.italic),
         ),
       ];
     }
@@ -168,16 +173,16 @@ class MarkdownEditingController extends TextEditingController {
         contentStyle = base.copyWith(
           fontFamily: 'monospace',
           fontSize: (base.fontSize ?? 16) * 0.92,
-          color: AppColors.cyan,
-          backgroundColor: AppColors.cyan.withValues(alpha: 0.10),
+          color: _p.accent,
+          backgroundColor: _p.accentSoft,
         );
         markerLength = 1;
       } else {
         content = match.namedGroup('strike')!;
         contentStyle = base.copyWith(
-          color: AppColors.textLow,
+          color: _p.textTertiary,
           decoration: TextDecoration.lineThrough,
-          decorationColor: AppColors.textLow,
+          decorationColor: _p.textTertiary,
         );
         markerLength = 2;
       }

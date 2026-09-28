@@ -1,3 +1,5 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
@@ -14,22 +16,24 @@ class AppErrorView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // This runs when something has already gone wrong, so it deliberately
-    // depends on nothing: no Theme lookup, no MediaQuery, no inherited state
-    // that might itself be the thing that failed.
-    return const ColoredBox(
-      color: AppColors.bg,
+    // depends on nothing in the tree: no Theme, no MediaQuery, no inherited
+    // state that might itself be what failed. Brightness is read straight from
+    // the platform instead, so the message still matches light or dark mode.
+    final AppPalette p =
+        PlatformDispatcher.instance.platformBrightness == Brightness.dark
+        ? AppPalette.dark
+        : AppPalette.light;
+
+    return ColoredBox(
+      color: p.background,
       child: Center(
         child: Padding(
-          padding: EdgeInsets.all(28),
+          padding: const EdgeInsets.all(28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(
-                Icons.error_outline_rounded,
-                size: 34,
-                color: AppColors.pink,
-              ),
-              SizedBox(height: 14),
+              Icon(Icons.error_outline_rounded, size: 30, color: p.holiday),
+              const SizedBox(height: 14),
               Text(
                 'Something went wrong here',
                 textAlign: TextAlign.center,
@@ -37,10 +41,10 @@ class AppErrorView extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textHigh,
+                  color: p.textPrimary,
                 ),
               ),
-              SizedBox(height: 6),
+              const SizedBox(height: 6),
               Text(
                 'Your notes are safe on this device. '
                 'Going back and reopening usually clears it.',
@@ -49,7 +53,7 @@ class AppErrorView extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13,
                   height: 1.45,
-                  color: Color(0xFF9A9CAD),
+                  color: p.textSecondary,
                 ),
               ),
             ],

@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'app.dart';
 import 'data/ads.dart';
@@ -23,15 +22,8 @@ void main() {
   // No-op unless built with --dart-define=ADS_ENABLED=true on mobile.
   unawaited(AdsConfig.init());
 
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      statusBarBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.transparent,
-      systemNavigationBarIconBrightness: Brightness.light,
-    ),
-  );
+  // Status and navigation bar icon colours follow the theme; NotedApp sets
+  // them through an AnnotatedRegion so they flip with light and dark mode.
 
   runApp(const NotedApp());
 }
