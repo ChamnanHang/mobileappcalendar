@@ -219,4 +219,24 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('Khmer headings are painted in one solid colour', (
+    WidgetTester tester,
+  ) async {
+    // Gradient text (a ShaderMask) only shades inside the Text's layout box.
+    // Khmer subscripts and vowel signs draw outside that box, so the old
+    // gradient month title showed the ញ subscript of កញ្ញា in plain white.
+    await openCalendar(tester);
+    expect(find.byType(ShaderMask), findsNothing);
+
+    final DateTime now = DateTime.now();
+    await tester.tap(
+      find.text('${gregorianMonthName(now.month)} ${toKhmerDigits(now.year)}'),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    // The month picker's Khmer year had the same gradient.
+    expect(find.byType(ShaderMask), findsNothing);
+  });
 }

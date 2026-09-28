@@ -142,7 +142,7 @@ Run `flutter doctor` to confirm what's missing.
 flutter test
 ```
 
-104 tests cover the notes controller (sorting, filtering, search, archive, undo, cache invalidation,
+105 tests cover the notes controller (sorting, filtering, search, archive, undo, cache invalidation,
 save durability), JSON persistence round-trips, the markdown helpers, the `Note` derived-state
 caches, the Khmer lunar algorithm (see the table above), the month cache and its LRU eviction, and
 widget tests for boot / open / search / calendar / month swipe / the expanding FAB / tab order,
