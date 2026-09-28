@@ -19,6 +19,9 @@ The app opens on the calendar; notes are the second tab.
 - **Khmer lunar calendar** — a month grid showing each day's lunar date (កើត / រោច), Buddhist holy
   days, Khmer New Year, and which days already have notes. Swipe sideways to change month. Computed
   on-device. See below.
+- **Morning reminder** — an optional notification each morning (7:00 by default, any time you
+  pick) with today's Khmer lunar date and the holy days and holidays falling today and tomorrow.
+  Turned on from the bell on the calendar. See below.
 - **Fully offline** — notes are stored on the device and the calendar is computed locally. No
   account, no server, no network calls at all.
 - **Accessible** — every control has a screen-reader label and a 44–48dp touch target, calendar
@@ -122,6 +125,26 @@ Khmer glyphs rely on the platform font: Android and iOS carry Khmer system fonts
 fetches a Noto fallback at runtime, so the first paint on web can briefly show ▯▯▯ boxes. Bundling
 `NotoSansKhmer` as an asset would remove that dependency.
 
+## Morning reminder
+
+Neither Android nor iOS runs app code at 7am to work out what a notification should say, and a
+repeating notification can only repeat the same text. The calendar is deterministic, though, so
+[lib/data/reminders.dart](lib/data/reminders.dart) computes each morning's text ahead of time
+([lib/data/morning_digest.dart](lib/data/morning_digest.dart)) and schedules the next 60 mornings
+as separate one-shot local notifications. Every return to the app rolls that window forward, so it
+only runs dry if the app goes unopened for two months. Sixty stays under iOS's cap of 64 pending
+notifications per app.
+
+- **Opt-in.** Off until the user turns it on, and the notification permission is requested at that
+  moment, not at launch. A refusal leaves it off and says where to change it.
+- **On time.** On Android below 14 the reminders use exact alarms, which need no prompt there. Android
+  14 denies exact alarms by default; the reminder then arrives within an hour, and the sheet offers
+  to open the setting that allows exact timing. `USE_EXACT_ALARM` is not used, because Play limits
+  it to alarm-clock and calendar apps and requires a declaration.
+- **Survives restarts.** A boot receiver re-registers pending reminders after a reboot or an app
+  update. The schedule is also rebuilt at every launch, which picks up a time-zone change.
+- **Offline.** Nothing leaves the device: no push service, no server, no account.
+
 ## Running it
 
 ```bash
@@ -142,18 +165,20 @@ Run `flutter doctor` to confirm what's missing.
 flutter test
 ```
 
-105 tests cover the notes controller (sorting, filtering, search, archive, undo, cache invalidation,
+128 tests cover the notes controller (sorting, filtering, search, archive, undo, cache invalidation,
 save durability), JSON persistence round-trips, the markdown helpers, the `Note` derived-state
 caches, the Khmer lunar algorithm (see the table above), the month cache and its LRU eviction, and
 widget tests for boot / open / search / calendar / month swipe / the expanding FAB / tab order,
-plus one that asserts the app settles — nothing animates forever.
+plus one that asserts the app settles — nothing animates forever. The morning reminder is covered
+from the text of each digest, through the 60-day plan and the controller's permission and
+rescheduling rules against a fake scheduler, to the settings sheet.
 
 ## Layout
 
 ```
 lib/
   main.dart                     entry point, error handling
-  app.dart                      NotedApp, injectable NoteStore
+  app.dart                      NotedApp, injectable NoteStore and reminder scheduler
   models/note.dart              Note, ChecklistItem, NoteKind
   data/
     note_store.dart             NoteStore interface, SharedPreferences + in-memory impls
@@ -161,6 +186,9 @@ lib/
     notes_scope.dart            InheritedNotifier wiring
     khmer_lunar.dart            the lunar calendar algorithm (pure Dart, no deps)
     khmer_month.dart            one month's computed grid, plus an LRU cache
+    morning_digest.dart         the text of one morning's reminder
+    reminders.dart              reminder settings, the 60-day plan, MorningReminders controller
+    local_notification_scheduler.dart  flutter_local_notifications + time zones
   screens/
     home_screen.dart            grid, search, filters, expanding FAB
     editor_screen.dart          title/body/checklist editing, options sheets
@@ -171,7 +199,7 @@ lib/
     markdown_text.dart          stripMarkdown, Flutter-free so models can use it
     khmer_text.dart             Khmer numerals, month/weekday/animal/era names
     date_keys.dart, relative_time.dart
-  widgets/                      surfaces, cards, sheets, nav bar
+  widgets/                      surfaces, cards, sheets, reminder sheet, nav bar
 ```
 
 ## Storage note

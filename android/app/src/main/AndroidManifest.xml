@@ -10,6 +10,18 @@
     <!-- <uses-permission android:name="com.google.android.gms.permission.AD_ID"
          tools:node="remove" /> -->
 
+    <!-- Morning reminder. POST_NOTIFICATIONS (the Android 13+ prompt) comes
+         from the flutter_local_notifications manifest. RECEIVE_BOOT_COMPLETED
+         lets the plugin re-register pending reminders after a restart, which
+         otherwise clears every alarm. SCHEDULE_EXACT_ALARM makes them arrive on
+         the minute: granted automatically on Android 12 and 13, off by default
+         on 14+, where the reminder sheet offers to open the setting and an
+         inexact reminder still arrives within the hour. USE_EXACT_ALARM is
+         deliberately not used: Play restricts it to alarm-clock and calendar
+         apps and asks for a declaration. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <application
         android:label="Noted"
         android:name="${applicationName}"
@@ -46,6 +58,21 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Shows scheduled reminders, and restores them after a reboot or an
+             app update. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
         <!-- AdMob app ID. Replace with your own from the AdMob console before
              release: a wrong or missing value crashes the app on startup. -->
         <meta-data

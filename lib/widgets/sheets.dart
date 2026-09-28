@@ -30,8 +30,8 @@ Future<T?> showAppSheet<T>({
   );
 }
 
-class _SheetHandle extends StatelessWidget {
-  const _SheetHandle();
+class SheetHandle extends StatelessWidget {
+  const SheetHandle({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +66,7 @@ class NoteOptionsSheet extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const _SheetHandle(),
+        const SheetHandle(),
         SheetTile(
           icon: Icons.sell_outlined,
           label: 'Tags',
@@ -201,7 +201,7 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const _SheetHandle(),
+        const SheetHandle(),
         Text('Tags', style: text.headlineSmall),
         const SizedBox(height: 14),
         SurfaceCard(
@@ -317,7 +317,7 @@ class _FolderPickerSheetState extends State<FolderPickerSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const _SheetHandle(),
+        const SheetHandle(),
         Text('Folder', style: text.headlineSmall),
         const SizedBox(height: 14),
         SheetTile(
@@ -397,7 +397,7 @@ class ConfirmSheet extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const _SheetHandle(),
+        const SheetHandle(),
         Text(title, style: text.headlineSmall),
         const SizedBox(height: 6),
         Text(message, style: text.bodySmall?.copyWith(color: p.textTertiary)),

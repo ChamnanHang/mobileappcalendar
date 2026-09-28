@@ -8,6 +8,7 @@ import '../data/khmer_lunar.dart';
 import '../data/khmer_month.dart';
 import '../data/notes_controller.dart';
 import '../data/notes_scope.dart';
+import '../data/reminders.dart';
 import '../models/note.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -15,6 +16,7 @@ import '../utils/date_keys.dart';
 import '../utils/khmer_text.dart';
 import '../widgets/surface.dart';
 import '../widgets/month_year_picker.dart';
+import '../widgets/reminder_sheet.dart';
 import '../widgets/sheets.dart';
 import 'editor_screen.dart';
 
@@ -145,6 +147,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final NotesController notes = NotesScope.of(context);
+    final MorningReminders? reminders = RemindersScope.maybeOf(context);
     _refreshNoteIndex(notes);
 
     final List<Note> notesOnSelected =
@@ -169,6 +172,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
               onNext: () => _shiftMonth(1),
               onToday: _goToday,
               onPickMonth: _pickMonth,
+              reminderOn: reminders?.settings.enabled ?? false,
+              onReminder: reminders != null && reminders.supported
+                  ? () => _openReminders(reminders)
+                  : null,
             ),
             const SizedBox(height: 16),
             if (_data.error != null) ...<Widget>[
@@ -205,6 +212,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _openReminders(MorningReminders reminders) async {
+    await showAppSheet<void>(
+      context: context,
+      builder: (BuildContext context) => ReminderSheet(reminders: reminders),
     );
   }
 
@@ -345,6 +359,8 @@ class _MonthHeader extends StatelessWidget {
     required this.onNext,
     required this.onToday,
     required this.onPickMonth,
+    this.reminderOn = false,
+    this.onReminder,
   });
 
   final DateTime month;
@@ -354,25 +370,65 @@ class _MonthHeader extends StatelessWidget {
   final VoidCallback onToday;
   final VoidCallback onPickMonth;
 
+  /// Whether the morning reminder is on, which fills the bell.
+  final bool reminderOn;
+
+  /// Opens the reminder settings; the bell is hidden when null.
+  final VoidCallback? onReminder;
+
   @override
   Widget build(BuildContext context) {
     final AppPalette p = context.palette;
     final TextTheme text = Theme.of(context).textTheme;
 
-    return Row(
+    final Widget buttons = Row(
+      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Expanded(
-          child: Semantics(
-            button: true,
-            label: 'Change month, currently ${_englishMonth(month)}',
-            excludeSemantics: true,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onPickMonth,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
+        // No gaps between the buttons: each 40dp circle already sits in a 48dp
+        // touch target, and the Khmer month name needs the width.
+        if (onReminder != null)
+          CircleIconButton(
+            icon: reminderOn
+                ? Icons.notifications_active_rounded
+                : Icons.notifications_none_rounded,
+            tooltip: reminderOn
+                ? 'Morning reminder, on'
+                : 'Morning reminder, off',
+            active: reminderOn,
+            onTap: onReminder,
+          ),
+        CircleIconButton(
+          icon: Icons.today_rounded,
+          tooltip: 'Today',
+          onTap: onToday,
+        ),
+        CircleIconButton(
+          icon: Icons.chevron_left_rounded,
+          tooltip: 'Previous month',
+          onTap: onPrev,
+        ),
+        CircleIconButton(
+          icon: Icons.chevron_right_rounded,
+          tooltip: 'Next month',
+          onTap: onNext,
+        ),
+      ],
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: 'Change month, currently ${_englishMonth(month)}',
+                excludeSemantics: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onPickMonth,
+                  child: Row(
                     children: <Widget>[
                       Flexible(
                         child: Text(
@@ -390,46 +446,36 @@ class _MonthHeader extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 2),
-                  // One rich text rather than a Row: a Row of fixed-width Texts
-                  // cannot shrink and overflows on narrow phones.
-                  Text.rich(
-                    TextSpan(
-                      children: <InlineSpan>[
-                        TextSpan(text: _englishMonth(month)),
-                        if (beYear != null) ...<InlineSpan>[
-                          const TextSpan(text: '  ·  '),
-                          TextSpan(
-                            text: 'ពុទ្ធសករាជ ${toKhmerDigits(beYear!)}',
-                          ),
-                        ],
-                      ],
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.labelSmall?.copyWith(color: p.textTertiary),
-                  ),
-                ],
+                ),
               ),
             ),
+            buttons,
+          ],
+        ),
+        // Below the buttons rather than beside them, so the Buddhist-era year
+        // gets the full width instead of being cut off. Also opens the picker;
+        // the title's label already tells a screen reader which month it is.
+        ExcludeSemantics(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onPickMonth,
+            // One rich text rather than a Row: a Row of fixed-width Texts
+            // cannot shrink and overflows on narrow phones.
+            child: Text.rich(
+              TextSpan(
+                children: <InlineSpan>[
+                  TextSpan(text: _englishMonth(month)),
+                  if (beYear != null) ...<InlineSpan>[
+                    const TextSpan(text: '  ·  '),
+                    TextSpan(text: 'ពុទ្ធសករាជ ${toKhmerDigits(beYear!)}'),
+                  ],
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: text.labelSmall?.copyWith(color: p.textTertiary),
+            ),
           ),
-        ),
-        CircleIconButton(
-          icon: Icons.today_rounded,
-          tooltip: 'Today',
-          onTap: onToday,
-        ),
-        const SizedBox(width: 8),
-        CircleIconButton(
-          icon: Icons.chevron_left_rounded,
-          tooltip: 'Previous month',
-          onTap: onPrev,
-        ),
-        const SizedBox(width: 8),
-        CircleIconButton(
-          icon: Icons.chevron_right_rounded,
-          tooltip: 'Next month',
-          onTap: onNext,
         ),
       ],
     );

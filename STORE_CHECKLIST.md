@@ -109,6 +109,14 @@ password, or a manual decision — I can't do these).
   accessibility font sizes do not break the compact chrome.
 - **[done]** **Reduce Motion** (iOS) / **Remove animations** (Android) is honoured; there is no
   continuously animating background left to stop — an idle screen draws no frames.
+- **[done]** **Morning reminder permissions.** Notifications are opt-in from the calendar's bell,
+  and the permission (Android 13+ `POST_NOTIFICATIONS`, iOS alert + sound) is requested only then.
+  The manifest adds `RECEIVE_BOOT_COMPLETED`, so reminders survive a reboot, and
+  `SCHEDULE_EXACT_ALARM`, which is not a restricted permission and needs no Play declaration.
+  `USE_EXACT_ALARM` is deliberately absent because it does need one. The notification icon is a
+  white vector (`drawable/ic_notification.xml`) kept through resource shrinking by
+  `raw/keep.xml`; without that rule, release builds would strip it, since Dart names it only as a
+  string. Reminders are local, so the **Data safety** and **App Privacy** answers do not change.
 
 ## 7. Store listing assets
 
@@ -149,6 +157,12 @@ linking, and asserts on the built bundle rather than on the repo: `PrivacyInfo.x
 `UIUserInterfaceStyle` pin, and the `LaunchBackground` colour is compiled into `Assets.car`. That retires the warning this file used to carry about the
 privacy manifest sitting outside the Xcode target — it is now proven bundled by a real build, not
 by reading the `.pbxproj`.
+
+**Morning reminder: built, not yet seen firing on a device.** The logic is unit-tested and both CI
+builds compile the plugin, the manifest receivers, desugaring and the iOS delegate. But no emulator
+or phone has shown the notification arrive at 7:00. Before release, on a real device: turn it on,
+set the time two minutes ahead, lock the phone, and confirm it arrives and reads correctly. Then
+reboot and repeat.
 
 **Still not exercised anywhere: code signing.** Neither the Android upload key nor an iOS
 distribution certificate is in the repo, so `flutter build ipa` and a Play-acceptable signed bundle
